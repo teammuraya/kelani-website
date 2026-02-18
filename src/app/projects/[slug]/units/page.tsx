@@ -71,7 +71,7 @@ export default function UnitSelectorPage() {
       {/* Hero banner */}
       <div className="relative h-56 md:h-72 overflow-hidden">
         <img
-          src={project.image_url}
+          src={project.image_url || undefined}
           alt={project.name}
           className="absolute inset-0 w-full h-full object-cover"
         />

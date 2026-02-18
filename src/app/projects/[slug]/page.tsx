@@ -629,7 +629,7 @@ export default function ProjectDetail() {
         <>
           <section className="relative h-[70vh] min-h-[500px] overflow-hidden">
             <img
-              src={project.image_url}
+              src={project.image_url || undefined}
               alt={project.name}
               className="absolute inset-0 w-full h-full object-cover"
             />
