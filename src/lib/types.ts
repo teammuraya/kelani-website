@@ -1,5 +1,5 @@
 export interface Project {
-  id: string;
+  _id: string;
   name: string;
   slug: string;
   tagline: string;
@@ -17,11 +17,11 @@ export interface Project {
   amenities: string[];
   completion_date: string;
   featured: boolean;
-  created_at: string;
+  _creationTime: number;
 }
 
 export interface Location {
-  id: string;
+  _id: string;
   name: string;
   slug: string;
   description: string;
@@ -29,7 +29,7 @@ export interface Location {
   country: string;
   city: string;
   projects_count: number;
-  created_at: string;
+  _creationTime: number;
 }
 
 export interface ContactSubmission {

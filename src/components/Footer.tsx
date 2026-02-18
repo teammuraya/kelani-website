@@ -1,4 +1,6 @@
-import { Link } from 'react-router-dom';
+'use client';
+
+import Link from 'next/link';
 import { Mail, Phone, MapPin, ArrowUpRight } from 'lucide-react';
 
 export default function Footer() {
@@ -7,7 +9,7 @@ export default function Footer() {
       <div className="max-w-7xl mx-auto px-6 lg:px-8">
         <div className="py-16 lg:py-20 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
           <div className="lg:col-span-1">
-            <Link to="/" className="flex items-center gap-2 mb-6">
+            <Link href="/" className="flex items-center gap-2 mb-6">
               <img
                 src="/kelani_logo_(3).png"
                 alt="Kelani"
@@ -43,7 +45,7 @@ export default function Footer() {
               ].map((link) => (
                 <li key={link.to}>
                   <Link
-                    to={link.to}
+                    href={link.to}
                     className="text-white/50 hover:text-white text-sm transition-colors duration-300 flex items-center gap-1 group"
                   >
                     {link.label}

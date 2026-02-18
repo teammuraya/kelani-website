@@ -1,6 +1,11 @@
 /** @type {import('tailwindcss').Config} */
-export default {
-  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+module.exports = {
+  content: [
+    './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/components/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/hooks/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/lib/**/*.{js,ts,jsx,tsx,mdx}',
+  ],
   theme: {
     extend: {
       colors: {
@@ -31,8 +36,8 @@ export default {
         },
       },
       fontFamily: {
-        display: ['"DM Sans"', 'system-ui', 'sans-serif'],
-        body: ['"DM Sans"', 'system-ui', 'sans-serif'],
+        display: ['var(--font-dm-sans)', 'system-ui', 'sans-serif'],
+        body: ['var(--font-dm-sans)', 'system-ui', 'sans-serif'],
       },
     },
   },

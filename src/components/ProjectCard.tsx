@@ -1,4 +1,6 @@
-import { Link } from 'react-router-dom';
+'use client';
+
+import Link from 'next/link';
 import { MapPin, ArrowRight, Bed, Maximize } from 'lucide-react';
 import type { Project } from '../lib/types';
 
@@ -25,7 +27,7 @@ function statusColor(status: string): string {
 export default function ProjectCard({ project }: { project: Project }) {
   return (
     <Link
-      to={`/projects/${project.slug}`}
+      href={`/projects/${project.slug}`}
       className="group block rounded-2xl overflow-hidden relative h-[520px] cursor-pointer"
     >
       <img

@@ -1,11 +1,13 @@
-import { Link } from 'react-router-dom';
+'use client';
+
+import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
 import type { Location } from '../lib/types';
 
 export default function LocationCard({ location }: { location: Location }) {
   return (
     <Link
-      to={`/locations#${location.slug}`}
+      href={`/locations#${location.slug}`}
       className="group relative block rounded-2xl overflow-hidden h-[400px] cursor-pointer"
     >
       <img

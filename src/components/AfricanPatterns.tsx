@@ -1,3 +1,5 @@
+'use client';
+
 import { useParallax } from '../hooks/useScrollAnimation';
 
 export function AfricanDividerLight() {
@@ -91,19 +93,17 @@ export function AfricanDividerDark() {
               strokeWidth="1"
               fill="none"
             />
-            <diamond>
-              <rect
-                x="96"
-                y="45"
-                width="8"
-                height="8"
-                rx="1"
-                transform="rotate(45, 100, 49)"
-                fill="none"
-                stroke="rgba(73,96,75,0.15)"
-                strokeWidth="0.8"
-              />
-            </diamond>
+            <rect
+              x="96"
+              y="45"
+              width="8"
+              height="8"
+              rx="1"
+              transform="rotate(45, 100, 49)"
+              fill="none"
+              stroke="rgba(73,96,75,0.15)"
+              strokeWidth="0.8"
+            />
           </g>
         ))}
       </svg>
