@@ -13,6 +13,7 @@ import type * as contactSubmissions from "../contactSubmissions.js";
 import type * as files from "../files.js";
 import type * as locations from "../locations.js";
 import type * as projectBuildings from "../projectBuildings.js";
+import type * as projectPhases from "../projectPhases.js";
 import type * as projectUnits from "../projectUnits.js";
 import type * as projects from "../projects.js";
 import type * as seed from "../seed.js";
@@ -29,6 +30,7 @@ declare const fullApi: ApiFromModules<{
   files: typeof files;
   locations: typeof locations;
   projectBuildings: typeof projectBuildings;
+  projectPhases: typeof projectPhases;
   projectUnits: typeof projectUnits;
   projects: typeof projects;
   seed: typeof seed;

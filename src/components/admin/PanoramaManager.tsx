@@ -22,8 +22,8 @@ type Panorama = {
 type UploadMode = 'url' | 'file';
 
 type Props = {
-  entityId: Id<'projects'> | Id<'project_units'> | Id<'project_buildings'>;
-  entityType: 'project' | 'unit' | 'building';
+  entityId: Id<'projects'> | Id<'project_units'> | Id<'project_buildings'> | Id<'project_phases'>;
+  entityType: 'project' | 'unit' | 'building' | 'phase';
   panoramas: Panorama[];
 };
 
@@ -108,6 +108,7 @@ export default function PanoramaManager({ entityId, entityType, panoramas }: Pro
   const updateProject  = useMutation(api.projects.update);
   const updateUnit     = useMutation(api.projectUnits.update);
   const updateBuilding = useMutation(api.projectBuildings.update);
+  const updatePhase    = useMutation(api.projectPhases.update);
   const generateUrl   = useMutation(api.files.generateUploadUrl);
   const getStorageUrl = useMutation(api.files.getUrl);
 
@@ -188,6 +189,8 @@ export default function PanoramaManager({ entityId, entityType, panoramas }: Pro
         await updateProject({ id: entityId as Id<'projects'>, panoramas: items });
       } else if (entityType === 'building') {
         await updateBuilding({ id: entityId as Id<'project_buildings'>, panoramas: items });
+      } else if (entityType === 'phase') {
+        await updatePhase({ id: entityId as Id<'project_phases'>, panoramas: items });
       } else {
         await updateUnit({ id: entityId as Id<'project_units'>, panoramas: items });
       }

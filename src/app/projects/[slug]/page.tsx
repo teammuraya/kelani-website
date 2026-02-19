@@ -298,6 +298,7 @@ export default function ProjectDetail() {
 
   const hasPanoramas = (project.panoramas ?? []).length > 0;
   const cats: Category[] = ['exterior', 'interior', 'gallery'];
+  const catLabels: Record<Category, string> = { exterior: 'Site Views', interior: 'Project Views', gallery: 'Gallery' };
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Fullscreen modal
@@ -341,17 +342,17 @@ export default function ProjectDetail() {
         {/* Bottom nav in fullscreen */}
         <div className="absolute bottom-6 left-0 right-0 z-20 flex flex-col items-center gap-4">
           <div className="flex items-center gap-1">
-            {cats.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setCategory(cat)}
-                className={`px-5 py-2 text-sm font-semibold uppercase tracking-wider transition-all ${
-                  category === cat ? 'text-white border-b-2 border-white' : 'text-white/50 hover:text-white border-b-2 border-transparent'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
+          {cats.map((cat) => (
+          <button
+          key={cat}
+          onClick={() => setCategory(cat)}
+          className={`px-5 py-2 text-sm font-semibold uppercase tracking-wider transition-all ${
+          category === cat ? 'text-white border-b-2 border-white' : 'text-white/50 hover:text-white border-b-2 border-transparent'
+          }`}
+          >
+          {catLabels[cat]}
+          </button>
+          ))}
           </div>
           <div className="flex items-center gap-2">
             {categoryMedia.slice(0, 7).map((m, i) => (
@@ -396,7 +397,7 @@ export default function ProjectDetail() {
                       category === cat ? 'text-white border-white' : 'text-white/50 border-transparent hover:text-white/70'
                     }`}
                   >
-                    {cat}
+                    {catLabels[cat]}
                   </button>
                 ))}
               </div>
@@ -548,7 +549,7 @@ export default function ProjectDetail() {
                       category === cat ? 'text-white' : 'text-white/50 hover:text-white/80'
                     }`}
                   >
-                    {cat}
+                    {catLabels[cat]}
                     {category === cat && (
                       <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-white rounded-full" />
                     )}

@@ -10,13 +10,10 @@ import MasterPlanViewer from '@/components/unit-viewer/MasterPlanViewer';
 export default function ExplorePage() {
   const { slug } = useParams<{ slug: string }>();
 
-  const project   = useQuery(api.projects.getBySlug,  { slug });
-  const buildings = useQuery(
-    api.projectBuildings.getByProjectSlug,
-    { projectSlug: slug }
-  );
+  const project = useQuery(api.projects.getBySlug, { slug });
+  const phases  = useQuery(api.projectPhases.getByProjectSlug, { projectSlug: slug });
 
-  if (project === undefined || buildings === undefined) {
+  if (project === undefined || phases === undefined) {
     return (
       <div className="flex items-center justify-center h-screen bg-black">
         <Loader2 className="w-8 h-8 text-white animate-spin" />
@@ -28,9 +25,7 @@ export default function ExplorePage() {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-black gap-4">
         <p className="text-white/60">Project not found.</p>
-        <Link href="/projects" className="text-olive-400 hover:underline text-sm">
-          ← Back to projects
-        </Link>
+        <Link href="/projects" className="text-olive-400 hover:underline text-sm">← Back to projects</Link>
       </div>
     );
   }
@@ -38,7 +33,7 @@ export default function ExplorePage() {
   return (
     <MasterPlanViewer
       project={project as any}
-      buildings={(buildings ?? []) as any}
+      phases={(phases ?? []) as any}
     />
   );
 }

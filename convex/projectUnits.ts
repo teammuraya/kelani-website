@@ -62,9 +62,30 @@ export const getBySlug = query({
   },
 });
 
+export const getByPhase = query({
+  args: { phaseId: v.id("project_phases") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("project_units")
+      .withIndex("by_phase", (q) => q.eq("phaseId", args.phaseId))
+      .collect();
+  },
+});
+
+export const getByBuilding = query({
+  args: { buildingId: v.id("project_buildings") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("project_units")
+      .withIndex("by_building", (q) => q.eq("buildingId", args.buildingId))
+      .collect();
+  },
+});
+
 export const create = mutation({
   args: {
     projectId: v.id("projects"),
+    phaseId: v.optional(v.id("project_phases")),
     buildingId: v.optional(v.id("project_buildings")),
     name: v.string(),
     slug: v.string(),
@@ -96,6 +117,7 @@ export const create = mutation({
 export const update = mutation({
   args: {
     id: v.id("project_units"),
+    phaseId: v.optional(v.id("project_phases")),
     buildingId: v.optional(v.id("project_buildings")),
     name: v.optional(v.string()),
     slug: v.optional(v.string()),
@@ -120,16 +142,6 @@ export const update = mutation({
   handler: async (ctx, { id, ...fields }) => {
     await ctx.db.patch(id, fields);
     return id;
-  },
-});
-
-export const getByBuilding = query({
-  args: { buildingId: v.id("project_buildings") },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("project_units")
-      .withIndex("by_building", (q) => q.eq("buildingId", args.buildingId))
-      .collect();
   },
 });
 

@@ -31,9 +31,15 @@ type Props = {
   projectId?: Id<'projects'>;
   unitId?: Id<'project_units'>;
   buildingId?: Id<'project_buildings'>;
+  phaseId?: Id<'project_phases'>;
   project?: any;
   unit?: any;
   building?: any;
+  phase?: any;
+  /** Override display labels for each category */
+  categoryLabels?: Partial<Record<Category, string>>;
+  /** Hide certain categories */
+  hideCategories?: Category[];
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -131,14 +137,15 @@ function ClipThumb({ item, index, label }: { item: MediaItem; index: number; lab
 
 // ─── Main MediaManager ────────────────────────────────────────────────────────
 
-export default function MediaManager({ projectId, unitId, buildingId, project, unit, building }: Props) {
+export default function MediaManager({ projectId, unitId, buildingId, phaseId, project, unit, building, phase, categoryLabels, hideCategories }: Props) {
   const updateProject  = useMutation(api.projects.update);
   const updateUnit     = useMutation(api.projectUnits.update);
   const updateBuilding = useMutation(api.projectBuildings.update);
+  const updatePhase    = useMutation(api.projectPhases.update);
   const generateUrl   = useMutation(api.files.generateUploadUrl);
   const getStorageUrl = useMutation(api.files.getUrl);
 
-  const entity = project || unit || building;
+  const entity = project || unit || building || phase;
   const [activeCategory, setActiveCategory] = useState<Category>('exterior');
   const [saving, setSaving]       = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -177,6 +184,7 @@ export default function MediaManager({ projectId, unitId, buildingId, project, u
       if (projectId)        await updateProject({ id: projectId,    [field]: items });
       else if (unitId)     await updateUnit({ id: unitId,      [field]: items });
       else if (buildingId) await updateBuilding({ id: buildingId, [field]: items });
+      else if (phaseId)   await updatePhase({ id: phaseId,     [field]: items });
       toast.success('Saved');
     } catch {
       toast.error('Failed to save');
@@ -306,7 +314,7 @@ export default function MediaManager({ projectId, unitId, buildingId, project, u
 
         {/* ── Category tabs ── */}
         <div className="flex items-center gap-1 p-4 border-b border-gray-100 bg-gray-50">
-          {(['exterior', 'interior', 'gallery'] as Category[]).map((cat) => (
+          {(['exterior', 'interior', 'gallery'] as Category[]).filter(c => !(hideCategories ?? []).includes(c)).map((cat) => (
             <button
               key={cat}
               onClick={() => setActiveCategory(cat)}
@@ -316,7 +324,7 @@ export default function MediaManager({ projectId, unitId, buildingId, project, u
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              {cat}
+              {(categoryLabels ?? {})[cat] ?? cat}
               <span className="ml-1.5 text-xs text-gray-400">
                 ({getMedia(cat).filter(m => !m.isTransition).length})
               </span>

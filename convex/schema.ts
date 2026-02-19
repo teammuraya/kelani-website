@@ -31,12 +31,12 @@ const zonePointValidator = v.object({
   y: v.number(),
 });
 
-// Master plan zone (a building zone drawn on the site/master plan)
+// Master plan zone — now references a PHASE (not a building)
 const masterPlanZoneValidator = v.object({
-  id: v.string(),         // client-generated UUID
-  label: v.string(),      // e.g. "Block A", "Tower 1"
+  id: v.string(),
+  label: v.string(),        // e.g. "Phase 1", "Phase 2"
   points: v.array(zonePointValidator),
-  buildingId: v.optional(v.id("project_buildings")),
+  phaseId: v.optional(v.id("project_phases")),
   status: v.union(
     v.literal("available"),
     v.literal("coming_soon"),
@@ -44,10 +44,23 @@ const masterPlanZoneValidator = v.object({
   ),
 });
 
-// Building floor plan zone (a unit polygon drawn on the floor plan image)
+// Phase unit zone — a unit polygon drawn on the phase plan image/video
+const phaseUnitZoneValidator = v.object({
+  id: v.string(),
+  label: v.string(),        // e.g. "Unit A1", "Plot 12"
+  points: v.array(zonePointValidator),
+  unitId: v.optional(v.id("project_units")),
+  status: v.union(
+    v.literal("available"),
+    v.literal("reserved"),
+    v.literal("sold"),
+  ),
+});
+
+// Legacy building floor plan zone (kept for backwards compat)
 const buildingFloorZoneValidator = v.object({
-  id: v.string(),         // client-generated UUID
-  label: v.string(),      // e.g. "A101"
+  id: v.string(),
+  label: v.string(),
   points: v.array(zonePointValidator),
   unitId: v.optional(v.id("project_units")),
   status: v.union(
@@ -81,32 +94,52 @@ export default defineSchema({
     amenities: v.array(v.string()),
     completion_date: v.string(),
     featured: v.boolean(),
-    // Rich media
-    exterior_media: v.optional(v.array(mediaItemValidator)),
-    interior_media: v.optional(v.array(mediaItemValidator)),
-    gallery_media: v.optional(v.array(mediaItemValidator)),
+    // Rich media — at project level these are "Site Views" + "Gallery"
+    exterior_media: v.optional(v.array(mediaItemValidator)),   // displayed as "Site Views"
+    interior_media: v.optional(v.array(mediaItemValidator)),   // displayed as "Project Views"
+    gallery_media: v.optional(v.array(mediaItemValidator)),    // "Gallery"
     panoramas: v.optional(v.array(panoramaValidator)),
     floor_plan_url: v.optional(v.string()),
     video_url: v.optional(v.string()),
     // Master plan / site plan
-    master_plan_url: v.optional(v.string()),        // the site/master plan image
-    master_plan_zones: v.optional(v.array(masterPlanZoneValidator)), // drawn building zones
+    master_plan_url: v.optional(v.string()),
+    master_plan_video_url: v.optional(v.string()),            // video that plays behind the master plan canvas
+    master_plan_zones: v.optional(v.array(masterPlanZoneValidator)), // phase zones on master plan
   })
     .index("by_slug", ["slug"])
     .index("by_featured", ["featured"])
     .index("by_status", ["status"]),
 
-  // ─── PROJECT BUILDINGS ────────────────────────────────────────────────────
+  // ─── PROJECT PHASES ───────────────────────────────────────────────────────
+  project_phases: defineTable({
+    projectId: v.id("projects"),
+    name: v.string(),          // e.g. "Phase 1 — Lakefront"
+    slug: v.string(),          // e.g. "phase-1"
+    description: v.optional(v.string()),
+    thumbnail_url: v.optional(v.string()),
+    // Phase plan — can be image AND/OR video (canvas overlays the video)
+    phase_plan_url: v.optional(v.string()),       // image used as canvas background
+    phase_plan_video_url: v.optional(v.string()), // video that plays behind canvas
+    phase_unit_zones: v.optional(v.array(phaseUnitZoneValidator)), // unit zones on phase plan
+    // Rich media — "Phase Views" + "Gallery"
+    exterior_media: v.optional(v.array(mediaItemValidator)),  // "Phase Views"
+    gallery_media: v.optional(v.array(mediaItemValidator)),   // "Gallery"
+    panoramas: v.optional(v.array(panoramaValidator)),
+    displayOrder: v.optional(v.number()),
+    total_units: v.optional(v.number()),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_project_slug", ["projectId", "slug"]),
+
+  // ─── PROJECT BUILDINGS (legacy — kept for migration safety) ──────────────
   project_buildings: defineTable({
     projectId: v.id("projects"),
     name: v.string(),
     slug: v.string(),
     description: v.optional(v.string()),
     thumbnail_url: v.optional(v.string()),
-    // Floor plan image on which unit zones are drawn
     floor_plan_url: v.optional(v.string()),
     floor_plan_zones: v.optional(v.array(buildingFloorZoneValidator)),
-    // Rich media (same as units)
     exterior_media: v.optional(v.array(mediaItemValidator)),
     interior_media: v.optional(v.array(mediaItemValidator)),
     gallery_media: v.optional(v.array(mediaItemValidator)),
@@ -121,7 +154,8 @@ export default defineSchema({
   // ─── PROJECT UNITS ────────────────────────────────────────────────────────
   project_units: defineTable({
     projectId: v.id("projects"),
-    buildingId: v.optional(v.id("project_buildings")),   // which building this unit is in
+    phaseId: v.optional(v.id("project_phases")),           // which phase this unit belongs to
+    buildingId: v.optional(v.id("project_buildings")),     // legacy
     name: v.string(),
     slug: v.string(),
     description: v.optional(v.string()),
@@ -147,6 +181,7 @@ export default defineSchema({
     displayOrder: v.optional(v.number()),
   })
     .index("by_project", ["projectId"])
+    .index("by_phase", ["phaseId"])
     .index("by_building", ["buildingId"])
     .index("by_project_slug", ["projectId", "slug"]),
 
