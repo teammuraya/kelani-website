@@ -1,25 +1,28 @@
 'use client';
 
 /**
- * ImmersiveCanvas — a full-screen canvas overlay for drawing and viewing zones.
+ * ImmersiveCanvas — full-screen canvas overlay for drawing and viewing zones.
  *
  * Modes:
- *   - "view":  read-only, zones are clickable, background fills the container
- *   - "edit":  draw mode toggle, can add/delete zones
+ *   "view" — read-only, zones are clickable / tappable
+ *   "edit" — draw mode toggle, can add/delete zones
  *
  * Background:
- *   - When imageUrl is provided, the image is drawn inside the canvas.
- *   - When transparent=true, the canvas background is clear — use this when
- *     a video or external image sits behind the canvas in a parent element.
+ *   imageUrl provided → image drawn inside canvas with internal pan/zoom
+ *   transparent=true  → canvas is clear; parent renders video/image behind it
  *
- * Zone points are stored as NORMALIZED (0–1) coordinates relative to the
- * container dimensions, so they are resolution-independent.
+ * Zone coords: NORMALIZED (0–1) relative to container dimensions.
  *
- * Transparent mode zoom:
- *   Since the canvas is transparent and a <video> sits behind it as a sibling,
- *   we can't zoom just the canvas. Instead we fire `onTransparentZoom` so the
- *   parent can apply a CSS transform to a wrapper that contains both the video
- *   and the canvas, making them scale together.
+ * Transparent-mode pan/zoom:
+ *   Parent wraps both <video> and this canvas in a single div and applies:
+ *     transform: translate(${tx}px, ${ty}px) scale(${scale})
+ *     transform-origin: 0 0
+ *   Fires `onTransparentZoom(scale, tx, ty)` on every change so parent stays in sync.
+ *
+ * Touch support (mobile):
+ *   • 1-finger tap   → zone click
+ *   • 1-finger drag  → pan  (transparent: only when zoomed in)
+ *   • 2-finger pinch → zoom (both transparent + image modes)
  */
 
 import React, {
@@ -32,15 +35,13 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type ZonePoint = { x: number; y: number };   // normalized 0–1
+export type ZonePoint  = { x: number; y: number };
 
 export type ZoneStatus =
-  | 'available' | 'coming_soon' | 'sold_out'
-  | 'reserved' | 'sold';
+  | 'available' | 'coming_soon' | 'sold_out' | 'reserved' | 'sold';
 
 export type CanvasZone = {
-  id: string;
-  label: string;
+  id: string; label: string;
   points: ZonePoint[];   // normalized 0-1 relative to container
   status: ZoneStatus;
   meta?: Record<string, any>;
@@ -50,539 +51,514 @@ export type ImmersiveCanvasMode = 'view' | 'edit';
 
 export type ImmersiveCanvasProps = {
   imageUrl?: string;
-  /** When true, canvas bg is transparent — parent renders video/image behind */
   transparent?: boolean;
   zones: CanvasZone[];
   mode?: ImmersiveCanvasMode;
   onZoneClick?: (zone: CanvasZone) => void;
-  onZoneAdd?: (points: ZonePoint[], id: string) => void;
+  onZoneAdd?:   (points: ZonePoint[], id: string) => void;
   onZoneDelete?: (zoneId: string) => void;
   highlightedZoneId?: string | null;
   className?: string;
   /**
-   * Called in transparent mode when zoomToZone / resetView change the desired
-   * CSS transform. Parent should apply this to a wrapper containing both the
-   * <video> and this canvas so they scale together.
-   *
-   * scale=1 / origin='50% 50%' means "reset to normal".
+   * Transparent mode: called whenever view transform changes.
+   * Parent must apply:
+   *   transform: translate(${tx}px, ${ty}px) scale(${scale})
+   *   transform-origin: 0 0
+   * to a wrapper div that contains BOTH the <video> and this canvas.
+   * scale=1, tx=0, ty=0 → identity / reset.
    */
-  onTransparentZoom?: (scale: number, originX: number, originY: number) => void;
+  onTransparentZoom?: (scale: number, tx: number, ty: number) => void;
 };
 
 export interface ImmersiveCanvasRef {
-  resetView: () => void;
+  resetView:  () => void;
   zoomToZone: (zoneId: string) => void;
 }
 
-// ─── Colour helpers ───────────────────────────────────────────────────────────
+// ─── Colours ─────────────────────────────────────────────────────────────────
 
 function zoneColor(status: ZoneStatus, alpha = 0.35): string {
-  switch (status) {
-    case 'available':   return `rgba(52,211,153,${alpha})`;
-    case 'coming_soon': return `rgba(251,191,36,${alpha})`;
-    case 'sold_out':    return `rgba(239,68,68,${alpha})`;
-    case 'reserved':    return `rgba(251,191,36,${alpha})`;
-    case 'sold':        return `rgba(156,163,175,${alpha})`;
-    default:            return `rgba(99,102,241,${alpha})`;
-  }
+  if (status === 'available')   return `rgba(52,211,153,${alpha})`;
+  if (status === 'coming_soon') return `rgba(251,191,36,${alpha})`;
+  if (status === 'sold_out')    return `rgba(239,68,68,${alpha})`;
+  if (status === 'reserved')    return `rgba(251,191,36,${alpha})`;
+  if (status === 'sold')        return `rgba(156,163,175,${alpha})`;
+  return `rgba(99,102,241,${alpha})`;
 }
-
 function zoneBorderColor(status: ZoneStatus): string {
-  switch (status) {
-    case 'available':   return 'rgba(52,211,153,0.9)';
-    case 'coming_soon': return 'rgba(251,191,36,0.9)';
-    case 'sold_out':    return 'rgba(239,68,68,0.9)';
-    case 'reserved':    return 'rgba(251,191,36,0.9)';
-    case 'sold':        return 'rgba(156,163,175,0.7)';
-    default:            return 'rgba(99,102,241,0.9)';
-  }
+  if (status === 'available')   return 'rgba(52,211,153,0.9)';
+  if (status === 'coming_soon') return 'rgba(251,191,36,0.9)';
+  if (status === 'sold_out')    return 'rgba(239,68,68,0.9)';
+  if (status === 'reserved')    return 'rgba(251,191,36,0.9)';
+  if (status === 'sold')        return 'rgba(156,163,175,0.7)';
+  return 'rgba(99,102,241,0.9)';
 }
 
-const CLOSE_THRESHOLD_PX = 18;
-const MIN_ZOOM  = 0.15;
-const MAX_ZOOM  = 8;
-const ZOOM_STEP = 0.15;
-const DPR = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const CLOSE_PX = 18;
+const MIN_Z    = 0.15;
+const MAX_Z    = 8;
+const Z_STEP   = 0.15;
+const DPR = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
 
 function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
+
+function clampTransparent(scale: number, tx: number, ty: number, cw: number, ch: number) {
+  if (scale <= 1) return { tx: 0, ty: 0 };
+  return {
+    tx: Math.min(0, Math.max(cw  * (1 - scale), tx)),
+    ty: Math.min(0, Math.max(ch * (1 - scale), ty)),
+  };
+}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export const ImmersiveCanvas = forwardRef<ImmersiveCanvasRef, ImmersiveCanvasProps>(
-  function ImmersiveCanvas(
-    {
-      imageUrl, transparent = false, zones, mode = 'view',
-      onZoneClick, onZoneAdd, onZoneDelete,
-      highlightedZoneId, className = '',
-      onTransparentZoom,
-    },
-    ref
-  ) {
+  function ImmersiveCanvas({
+    imageUrl, transparent = false, zones, mode = 'view',
+    onZoneClick, onZoneAdd, onZoneDelete,
+    highlightedZoneId, className = '',
+    onTransparentZoom,
+  }, ref) {
     const canvasRef    = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const imageRef     = useRef<HTMLImageElement | null>(null);
     const rafRef       = useRef<number>(0);
 
-    // Internal pan/zoom (image-mode only)
+    // Image-mode internal pan/zoom
     const zoomRef = useRef(1);
     const panRef  = useRef({ x: 0, y: 0 });
     const [, forceUpdate] = useState(0);
-    const triggerRender = useCallback(() => forceUpdate(n => n + 1), []);
+    const rerender = useCallback(() => forceUpdate(n => n + 1), []);
+
+    // Transparent-mode transform state (kept in refs to avoid flicker)
+    const tScale = useRef(1);
+    const tTx    = useRef(0);
+    const tTy    = useRef(0);
 
     const [imgLoaded, setImgLoaded] = useState(false);
     const [imgSize,   setImgSize]   = useState({ w: 1, h: 1 });
 
-    const [isDrawing,      setIsDrawing]      = useState(false);
-    const [drawPath,       setDrawPath]       = useState<ZonePoint[]>([]);
-    const [nearStart,      setNearStart]      = useState(false);
-    const [isPanning,      setIsPanning]      = useState(false);
-    const [dragLast,       setDragLast]       = useState({ x: 0, y: 0 });
-    const [hoverZoneId,    setHoverZoneId]    = useState<string | null>(null);
-    const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+    // Drawing state
+    const [isDrawing,   setIsDrawing]   = useState(false);
+    const [drawPath,    setDrawPath]    = useState<ZonePoint[]>([]);
+    const [nearStart,   setNearStart]   = useState(false);
+    // Mouse drag state
+    const [isPanning,   setIsPanning]   = useState(false);
+    const [dragLast,    setDragLast]    = useState({ x: 0, y: 0 });
+    // Hover / selection
+    const [hoverZoneId, setHoverZoneId] = useState<string | null>(null);
+    const [selZoneId,   setSelZoneId]   = useState<string | null>(null);
 
-    // ── Load image (image-mode only) ────────────────────────────────────────
+    // Touch gesture bookkeeping (mutable ref — no re-render needed)
+    const touch = useRef({
+      active:     [] as { id: number; x: number; y: number }[],
+      tapStart:   null as { x: number; y: number } | null,
+      tapTime:    0,
+      moved:      false,
+      pinching:   false,
+    });
+
+    // ── Image load ────────────────────────────────────────────────────────
 
     useEffect(() => {
-      if (transparent) {
-        setImgLoaded(true);
-        imageRef.current = null;
-        return;
-      }
+      if (transparent) { setImgLoaded(true); imageRef.current = null; return; }
       if (!imageUrl) return;
       setImgLoaded(false);
       const img = new Image();
       img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        imageRef.current = img;
-        setImgSize({ w: img.naturalWidth, h: img.naturalHeight });
-        setImgLoaded(true);
-      };
+      img.onload = () => { imageRef.current = img; setImgSize({ w: img.naturalWidth, h: img.naturalHeight }); setImgLoaded(true); };
       img.onerror = () => { imageRef.current = null; setImgLoaded(true); };
       img.src = imageUrl;
       return () => { img.onload = null; img.onerror = null; };
     }, [imageUrl, transparent]);
 
-    // ── Fit to container (image-mode) ───────────────────────────────────────
+    // ── Fit / reset ───────────────────────────────────────────────────────
 
     const fitToContainer = useCallback(() => {
       if (transparent) {
-        // Signal parent to reset CSS zoom
-        onTransparentZoom?.(1, 50, 50);
+        tScale.current = 1; tTx.current = 0; tTy.current = 0;
+        onTransparentZoom?.(1, 0, 0);
         return;
       }
-      const container = containerRef.current;
-      if (!container || !imgLoaded) return;
-      const cw = container.clientWidth;
-      const ch = container.clientHeight;
+      const c = containerRef.current;
+      if (!c || !imgLoaded) return;
+      const cw = c.clientWidth; const ch = c.clientHeight;
       const img = imageRef.current;
-      if (!img) { zoomRef.current = 1; panRef.current = { x: 0, y: 0 }; triggerRender(); return; }
+      if (!img) { zoomRef.current = 1; panRef.current = { x: 0, y: 0 }; rerender(); return; }
       const z = Math.min(cw / imgSize.w, ch / imgSize.h) * 0.95;
       zoomRef.current = z;
-      panRef.current  = {
-        x: (cw - imgSize.w * z) / 2,
-        y: (ch - imgSize.h * z) / 2,
-      };
-      triggerRender();
-    }, [imgLoaded, imgSize, transparent, triggerRender, onTransparentZoom]);
+      panRef.current  = { x: (cw - imgSize.w * z) / 2, y: (ch - imgSize.h * z) / 2 };
+      rerender();
+    }, [imgLoaded, imgSize, transparent, rerender, onTransparentZoom]);
 
     useEffect(() => { fitToContainer(); }, [fitToContainer]);
 
-    // ── zoomToZone ──────────────────────────────────────────────────────────
+    // ── zoomToZone ────────────────────────────────────────────────────────
 
     const zoomToZone = useCallback((zoneId: string) => {
       const zone = zones.find(z => z.id === zoneId);
       if (!zone || zone.points.length < 3) return;
-      const container = containerRef.current;
-      if (!container) return;
-      const cw = container.clientWidth;
-      const ch = container.clientHeight;
+      const c = containerRef.current; if (!c) return;
+      const cw = c.clientWidth; const ch = c.clientHeight;
 
       if (transparent) {
-        // Zone points are 0-1 relative to the container.
-        // Convert to container px to compute bounding box.
         const xs = zone.points.map(p => p.x * cw);
         const ys = zone.points.map(p => p.y * ch);
-        const minX = Math.min(...xs), maxX = Math.max(...xs);
-        const minY = Math.min(...ys), maxY = Math.max(...ys);
-        const bw = maxX - minX || 1;
-        const bh = maxY - minY || 1;
-        // Centre of the zone as percentages (for CSS transform-origin)
-        const cx = (minX + maxX) / 2;
-        const cy = (minY + maxY) / 2;
-        const originXpct = (cx / cw) * 100;
-        const originYpct = (cy / ch) * 100;
-        // Scale so the zone fills ~60% of the screen
-        const scale = Math.min(4, Math.min((cw * 0.6) / bw, (ch * 0.6) / bh));
+        const x0 = Math.min(...xs), x1 = Math.max(...xs);
+        const y0 = Math.min(...ys), y1 = Math.max(...ys);
+        const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+        const targetScale = Math.min(4, Math.min((cw * 0.6) / ((x1 - x0) || 1), (ch * 0.6) / ((y1 - y0) || 1)));
+        // translate so zone center appears at viewport center: cw/2 = tx + cx*s
+        const rawTx = cw / 2 - cx * targetScale;
+        const rawTy = ch / 2 - cy * targetScale;
+        const { tx: tgtTx, ty: tgtTy } = clampTransparent(targetScale, rawTx, rawTy, cw, ch);
 
-        // Animate via rAF, calling parent each frame
-        const startScale = 1; // always animate from identity for simplicity
-        const duration   = 400;
-        const start      = performance.now();
-        const animate = (now: number) => {
-          const t    = Math.min(1, (now - start) / duration);
-          const ease = 1 - Math.pow(1 - t, 3);
-          onTransparentZoom?.(
-            lerp(startScale, scale, ease),
-            originXpct,
-            originYpct,
-          );
-          if (t < 1) requestAnimationFrame(animate);
+        const s0 = tScale.current, tx0 = tTx.current, ty0 = tTy.current;
+        const dur = 400, t0 = performance.now();
+        const go = (now: number) => {
+          const t = Math.min(1, (now - t0) / dur);
+          const e = 1 - Math.pow(1 - t, 3);
+          tScale.current = lerp(s0, targetScale, e);
+          tTx.current    = lerp(tx0, tgtTx, e);
+          tTy.current    = lerp(ty0, tgtTy, e);
+          onTransparentZoom?.(tScale.current, tTx.current, tTy.current);
+          if (t < 1) requestAnimationFrame(go);
         };
-        requestAnimationFrame(animate);
+        requestAnimationFrame(go);
         return;
       }
 
-      // Image mode — animate internal pan/zoom
+      // Image mode
       const xs = zone.points.map(p => p.x * imgSize.w);
       const ys = zone.points.map(p => p.y * imgSize.h);
-      const minX = Math.min(...xs), maxX = Math.max(...xs);
-      const minY = Math.min(...ys), maxY = Math.max(...ys);
-      const bw = maxX - minX || 1;
-      const bh = maxY - minY || 1;
-      const cx = (minX + maxX) / 2;
-      const cy = (minY + maxY) / 2;
-
-      const targetZ   = Math.min(MAX_ZOOM, Math.min((cw * 0.6) / bw, (ch * 0.6) / bh));
+      const x0 = Math.min(...xs), x1 = Math.max(...xs);
+      const y0 = Math.min(...ys), y1 = Math.max(...ys);
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+      const targetZ   = Math.min(MAX_Z, Math.min((cw * 0.6) / ((x1 - x0) || 1), (ch * 0.6) / ((y1 - y0) || 1)));
       const targetPan = { x: cw / 2 - cx * targetZ, y: ch / 2 - cy * targetZ };
-
-      const startZ   = zoomRef.current;
-      const startPan = { ...panRef.current };
-      const duration = 400;
-      const start    = performance.now();
-      const animate  = (now: number) => {
-        const t = Math.min(1, (now - start) / duration);
-        const ease = 1 - Math.pow(1 - t, 3);
-        zoomRef.current = lerp(startZ, targetZ, ease);
-        panRef.current  = {
-          x: lerp(startPan.x, targetPan.x, ease),
-          y: lerp(startPan.y, targetPan.y, ease),
-        };
-        triggerRender();
-        if (t < 1) requestAnimationFrame(animate);
+      const z0 = zoomRef.current, p0 = { ...panRef.current };
+      const dur = 400, t0 = performance.now();
+      const go = (now: number) => {
+        const t = Math.min(1, (now - t0) / dur); const e = 1 - Math.pow(1 - t, 3);
+        zoomRef.current = lerp(z0, targetZ, e);
+        panRef.current  = { x: lerp(p0.x, targetPan.x, e), y: lerp(p0.y, targetPan.y, e) };
+        rerender(); if (t < 1) requestAnimationFrame(go);
       };
-      requestAnimationFrame(animate);
-    }, [zones, imgSize, transparent, triggerRender, onTransparentZoom]);
+      requestAnimationFrame(go);
+    }, [zones, imgSize, transparent, rerender, onTransparentZoom]);
 
     useImperativeHandle(ref, () => ({ resetView: fitToContainer, zoomToZone }));
 
-    // ── Canvas resize ───────────────────────────────────────────────────────
+    // ── Canvas resize observer ────────────────────────────────────────────
 
     useEffect(() => {
       const obs = new ResizeObserver(() => {
-        const canvas = canvasRef.current;
-        const cont   = containerRef.current;
-        if (!canvas || !cont) return;
-        const w = cont.clientWidth;
-        const h = cont.clientHeight;
-        canvas.width        = w * DPR;
-        canvas.height       = h * DPR;
-        canvas.style.width  = `${w}px`;
-        canvas.style.height = `${h}px`;
+        const cv = canvasRef.current; const co = containerRef.current;
+        if (!cv || !co) return;
+        const w = co.clientWidth, h = co.clientHeight;
+        cv.width = w * DPR; cv.height = h * DPR;
+        cv.style.width = `${w}px`; cv.style.height = `${h}px`;
         fitToContainer();
       });
       if (containerRef.current) obs.observe(containerRef.current);
       return () => obs.disconnect();
     }, [fitToContainer]);
 
-    // ── Helpers ─────────────────────────────────────────────────────────────
+    // ── Hit test ──────────────────────────────────────────────────────────
 
-    const getCanvasPos = (e: React.MouseEvent) => {
-      const rect = canvasRef.current!.getBoundingClientRect();
-      return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-    };
-
-    // In image mode: convert image-space pixel → normalized
-    const imageToNorm = (p: ZonePoint): ZonePoint => ({
-      x: p.x / imgSize.w,
-      y: p.y / imgSize.h,
-    });
-
-    // In image mode: normalized → image-space pixel → canvas pixel
-    const normToCanvas = (p: ZonePoint): ZonePoint => ({
-      x: p.x * imgSize.w * zoomRef.current + panRef.current.x,
-      y: p.y * imgSize.h * zoomRef.current + panRef.current.y,
-    });
-
-    // ── Draw loop ───────────────────────────────────────────────────────────
-
-    const render = useCallback(() => {
-      const canvas = canvasRef.current;
-      const ctx    = canvas?.getContext('2d');
-      if (!ctx || !canvas) return;
-
-      const zoom = zoomRef.current;
-      const pan  = panRef.current;
-      const W = canvas.width  / DPR;
-      const H = canvas.height / DPR;
-
-      ctx.save();
-      ctx.scale(DPR, DPR);
-      ctx.clearRect(0, 0, W, H);
-
-      // Background (image-mode only)
-      if (!transparent) {
-        const img = imageRef.current;
-        if (img) {
-          ctx.drawImage(img, pan.x, pan.y, imgSize.w * zoom, imgSize.h * zoom);
-        } else {
-          ctx.fillStyle = '#111';
-          ctx.fillRect(0, 0, W, H);
-        }
-      }
-
-      // ── Draw zones ──────────────────────────────────────────────────────
-      for (const zone of zones) {
-        if (zone.points.length < 3) continue;
-
-        // TRANSPARENT MODE: zone 0-1 → container pixels (W×H)
-        // IMAGE MODE:       zone 0-1 → image pixels → canvas pixels via pan/zoom
-        const pts = transparent
-          ? zone.points.map(p => ({ x: p.x * W, y: p.y * H }))
-          : zone.points.map(p => ({
-              x: p.x * imgSize.w * zoom + pan.x,
-              y: p.y * imgSize.h * zoom + pan.y,
-            }));
-
-        const isHov = zone.id === hoverZoneId || zone.id === highlightedZoneId;
-        const isSel = zone.id === selectedZoneId;
-
-        ctx.beginPath();
-        ctx.moveTo(pts[0].x, pts[0].y);
-        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-        ctx.closePath();
-
-        ctx.fillStyle   = zoneColor(zone.status, isHov || isSel ? 0.55 : 0.25);
-        ctx.strokeStyle = zoneBorderColor(zone.status);
-        ctx.lineWidth   = isHov || isSel ? 2.5 : 1.5;
-        ctx.fill();
-        ctx.stroke();
-
-        // Label
-        if (transparent || zoom > 0.25) {
-          const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
-          const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
-          const fontSize = transparent ? 13 : Math.max(10, Math.min(16, zoom * 14));
-          ctx.font         = `600 ${fontSize}px system-ui, sans-serif`;
-          ctx.fillStyle    = '#fff';
-          ctx.shadowColor  = 'rgba(0,0,0,0.8)';
-          ctx.shadowBlur   = 5;
-          ctx.textAlign    = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(zone.label, cx, cy);
-          ctx.shadowBlur   = 0;
-        }
-      }
-
-      // ── Draw in-progress polygon ────────────────────────────────────────
-      if (isDrawing && drawPath.length > 0) {
-        // drawPath points: transparent → 0-1; image → image px
-        const pts = drawPath.map(p => transparent
-          ? { x: p.x * W, y: p.y * H }
-          : { x: p.x * zoom + pan.x, y: p.y * zoom + pan.y }
-        );
-        ctx.beginPath();
-        ctx.moveTo(pts[0].x, pts[0].y);
-        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-        ctx.strokeStyle = '#f97316';
-        ctx.lineWidth   = 2;
-        ctx.setLineDash([6, 4]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        for (const p of pts) {
-          ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
-          ctx.fillStyle = '#f97316'; ctx.fill();
-        }
-        if (nearStart && drawPath.length > 2) {
-          ctx.beginPath(); ctx.arc(pts[0].x, pts[0].y, 10, 0, Math.PI * 2);
-          ctx.strokeStyle = '#f97316'; ctx.lineWidth = 2; ctx.stroke();
-        }
-      }
-
-      ctx.restore();
-    }, [
-      zones, drawPath, isDrawing, nearStart,
-      hoverZoneId, highlightedZoneId, selectedZoneId,
-      imgSize, transparent,
-    ]);
-
-    useEffect(() => {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = requestAnimationFrame(render);
-      return () => cancelAnimationFrame(rafRef.current);
-    }, [render]);
-
-    // ── Hit test ────────────────────────────────────────────────────────────
-    // Must mirror the exact same coordinate transform used in the render loop.
-
-    const hitTest = useCallback((cx: number, cy: number): CanvasZone | null => {
-      const zoom = zoomRef.current;
-      const pan  = panRef.current;
+    const hitTest = useCallback((px: number, py: number): CanvasZone | null => {
+      const z = zoomRef.current, p = panRef.current;
       const rect = canvasRef.current?.getBoundingClientRect();
-      const CW   = rect?.width  ?? 1;
-      const CH   = rect?.height ?? 1;
-
+      const CW = rect?.width ?? 1, CH = rect?.height ?? 1;
       for (let i = zones.length - 1; i >= 0; i--) {
-        const zone = zones[i];
-        if (zone.points.length < 3) continue;
-
-        // Same transform as render:
+        const zone = zones[i]; if (zone.points.length < 3) continue;
         const pts = transparent
-          ? zone.points.map(p => ({ x: p.x * CW, y: p.y * CH }))
-          : zone.points.map(p => ({
-              x: p.x * imgSize.w * zoom + pan.x,
-              y: p.y * imgSize.h * zoom + pan.y,
-            }));
-
-        // Test point is already in canvas-pixel space (from getBoundingClientRect)
+          ? zone.points.map(q => ({ x: q.x * CW, y: q.y * CH }))
+          : zone.points.map(q => ({ x: q.x * imgSize.w * z + p.x, y: q.y * imgSize.h * z + p.y }));
         let inside = false;
         for (let j = 0, k = pts.length - 1; j < pts.length; k = j++) {
-          const xi = pts[j].x, yi = pts[j].y;
-          const xk = pts[k].x, yk = pts[k].y;
-          if ((yi > cy) !== (yk > cy) && cx < ((xk - xi) * (cy - yi)) / (yk - yi) + xi) {
-            inside = !inside;
-          }
+          const xi = pts[j].x, yi = pts[j].y, xk = pts[k].x, yk = pts[k].y;
+          if ((yi > py) !== (yk > py) && px < ((xk - xi) * (py - yi)) / (yk - yi) + xi) inside = !inside;
         }
         if (inside) return zone;
       }
       return null;
     }, [zones, transparent, imgSize]);
 
-    // ── Mouse handlers ──────────────────────────────────────────────────────
+    // ── Draw render loop ──────────────────────────────────────────────────
+
+    const render = useCallback(() => {
+      const cv = canvasRef.current; const ctx = cv?.getContext('2d');
+      if (!ctx || !cv) return;
+      const z = zoomRef.current, p = panRef.current;
+      const W = cv.width / DPR, H = cv.height / DPR;
+      ctx.save(); ctx.scale(DPR, DPR); ctx.clearRect(0, 0, W, H);
+
+      if (!transparent) {
+        const img = imageRef.current;
+        if (img) ctx.drawImage(img, p.x, p.y, imgSize.w * z, imgSize.h * z);
+        else { ctx.fillStyle = '#111'; ctx.fillRect(0, 0, W, H); }
+      }
+
+      for (const zone of zones) {
+        if (zone.points.length < 3) continue;
+        const pts = transparent
+          ? zone.points.map(q => ({ x: q.x * W, y: q.y * H }))
+          : zone.points.map(q => ({ x: q.x * imgSize.w * z + p.x, y: q.y * imgSize.h * z + p.y }));
+        const hot = zone.id === hoverZoneId || zone.id === highlightedZoneId || zone.id === selZoneId;
+        ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+        ctx.closePath();
+        ctx.fillStyle   = zoneColor(zone.status, hot ? 0.55 : 0.25);
+        ctx.strokeStyle = zoneBorderColor(zone.status);
+        ctx.lineWidth   = hot ? 2.5 : 1.5;
+        ctx.fill(); ctx.stroke();
+        if (transparent || z > 0.25) {
+          const cx = pts.reduce((s, q) => s + q.x, 0) / pts.length;
+          const cy = pts.reduce((s, q) => s + q.y, 0) / pts.length;
+          const fs = transparent ? 13 : Math.max(10, Math.min(16, z * 14));
+          ctx.font = `600 ${fs}px system-ui,sans-serif`; ctx.fillStyle = '#fff';
+          ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 5;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(zone.label, cx, cy); ctx.shadowBlur = 0;
+        }
+      }
+
+      if (isDrawing && drawPath.length > 0) {
+        const pts = drawPath.map(q => transparent ? { x: q.x * W, y: q.y * H } : { x: q.x * z + p.x, y: q.y * z + p.y });
+        ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+        ctx.strokeStyle = '#f97316'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ctx.stroke(); ctx.setLineDash([]);
+        for (const q of pts) { ctx.beginPath(); ctx.arc(q.x, q.y, 5, 0, Math.PI * 2); ctx.fillStyle = '#f97316'; ctx.fill(); }
+        if (nearStart && drawPath.length > 2) { ctx.beginPath(); ctx.arc(pts[0].x, pts[0].y, 10, 0, Math.PI * 2); ctx.strokeStyle = '#f97316'; ctx.lineWidth = 2; ctx.stroke(); }
+      }
+      ctx.restore();
+    }, [zones, drawPath, isDrawing, nearStart, hoverZoneId, highlightedZoneId, selZoneId, imgSize, transparent]);
+
+    useEffect(() => { cancelAnimationFrame(rafRef.current); rafRef.current = requestAnimationFrame(render); return () => cancelAnimationFrame(rafRef.current); }, [render]);
+
+    // ── imageToNorm helper ────────────────────────────────────────────────
+
+    const imageToNorm = useCallback((q: ZonePoint): ZonePoint => ({ x: q.x / imgSize.w, y: q.y / imgSize.h }), [imgSize]);
+
+    // ── Mouse handlers ────────────────────────────────────────────────────
+
+    const getMousePos = (e: React.MouseEvent) => {
+      const r = canvasRef.current!.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    };
 
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
-      const pos = getCanvasPos(e);
-
+      const pos = getMousePos(e);
       if (transparent) {
         if (isDrawing) {
-          const rect = canvasRef.current!.getBoundingClientRect();
-          const normPt: ZonePoint = { x: pos.x / rect.width, y: pos.y / rect.height };
-          if (nearStart && drawPath.length > 2) {
-            onZoneAdd?.(drawPath, `zone-${Date.now()}`);
-            setDrawPath([]); setNearStart(false);
-          } else {
-            setDrawPath(prev => [...prev, normPt]);
-          }
+          const r = canvasRef.current!.getBoundingClientRect();
+          const np: ZonePoint = { x: pos.x / r.width, y: pos.y / r.height };
+          if (nearStart && drawPath.length > 2) { onZoneAdd?.(drawPath, `zone-${Date.now()}`); setDrawPath([]); setNearStart(false); }
+          else setDrawPath(prev => [...prev, np]);
         }
         return;
       }
-
       if (isDrawing) {
-        // image mode: store as image-px (will normalize on save)
-        const imgPt: ZonePoint = {
-          x: (pos.x - panRef.current.x) / zoomRef.current,
-          y: (pos.y - panRef.current.y) / zoomRef.current,
-        };
-        if (nearStart && drawPath.length > 2) {
-          onZoneAdd?.(drawPath.map(imageToNorm), `zone-${Date.now()}`);
-          setDrawPath([]); setNearStart(false);
-        } else {
-          setDrawPath(prev => [...prev, imgPt]);
-        }
+        const ip: ZonePoint = { x: (pos.x - panRef.current.x) / zoomRef.current, y: (pos.y - panRef.current.y) / zoomRef.current };
+        if (nearStart && drawPath.length > 2) { onZoneAdd?.(drawPath.map(imageToNorm), `zone-${Date.now()}`); setDrawPath([]); setNearStart(false); }
+        else setDrawPath(prev => [...prev, ip]);
         return;
       }
-
-      setIsPanning(true);
-      setDragLast(pos);
-    }, [isDrawing, nearStart, drawPath, onZoneAdd, transparent]);
+      setIsPanning(true); setDragLast(pos);
+    }, [isDrawing, nearStart, drawPath, onZoneAdd, transparent, imageToNorm]);
 
     const handleMouseMove = useCallback((e: React.MouseEvent) => {
-      const pos = getCanvasPos(e);
-
-      // Update hover zone
-      if (!isDrawing) {
-        setHoverZoneId(hitTest(pos.x, pos.y)?.id ?? null);
-      }
-
-      // Panning (image mode only)
+      const pos = getMousePos(e);
+      if (!isDrawing) setHoverZoneId(hitTest(pos.x, pos.y)?.id ?? null);
       if (isPanning && !transparent) {
-        panRef.current = {
-          x: panRef.current.x + pos.x - dragLast.x,
-          y: panRef.current.y + pos.y - dragLast.y,
-        };
-        setDragLast(pos);
-        triggerRender();
-        return;
+        panRef.current = { x: panRef.current.x + pos.x - dragLast.x, y: panRef.current.y + pos.y - dragLast.y };
+        setDragLast(pos); rerender(); return;
       }
-
-      // Near-start detection for drawing
       if (isDrawing && drawPath.length > 2) {
         if (transparent) {
-          const rect = canvasRef.current!.getBoundingClientRect();
-          const sx = drawPath[0].x * rect.width;
-          const sy = drawPath[0].y * rect.height;
-          setNearStart(Math.hypot(pos.x - sx, pos.y - sy) < CLOSE_THRESHOLD_PX);
+          const r = canvasRef.current!.getBoundingClientRect();
+          setNearStart(Math.hypot(pos.x - drawPath[0].x * r.width, pos.y - drawPath[0].y * r.height) < CLOSE_PX);
         } else {
-          const sx = drawPath[0].x * zoomRef.current + panRef.current.x;
-          const sy = drawPath[0].y * zoomRef.current + panRef.current.y;
-          setNearStart(Math.hypot(pos.x - sx, pos.y - sy) < CLOSE_THRESHOLD_PX);
+          setNearStart(Math.hypot(pos.x - (drawPath[0].x * zoomRef.current + panRef.current.x), pos.y - (drawPath[0].y * zoomRef.current + panRef.current.y)) < CLOSE_PX);
         }
       }
-    }, [isDrawing, isPanning, drawPath, dragLast, hitTest, transparent, triggerRender]);
+    }, [isDrawing, isPanning, drawPath, dragLast, hitTest, transparent, rerender]);
 
     const handleMouseUp = useCallback((e: React.MouseEvent) => {
-      const pos = getCanvasPos(e);
-
+      const pos = getMousePos(e);
       if (transparent) {
-        if (!isDrawing) {
-          const zone = hitTest(pos.x, pos.y);
-          if (zone) {
-            if (mode === 'view') onZoneClick?.(zone);
-            else setSelectedZoneId(prev => prev === zone.id ? null : zone.id);
-          }
-        }
+        if (!isDrawing) { const z = hitTest(pos.x, pos.y); if (z) { if (mode === 'view') onZoneClick?.(z); else setSelZoneId(p => p === z.id ? null : z.id); } }
         return;
       }
-
-      if (!isPanning) return;
-      setIsPanning(false);
-      const dx = pos.x - dragLast.x;
-      const dy = pos.y - dragLast.y;
-      if (Math.abs(dx) < 4 && Math.abs(dy) < 4 && !isDrawing) {
-        const zone = hitTest(pos.x, pos.y);
-        if (zone) {
-          if (mode === 'view') onZoneClick?.(zone);
-          else setSelectedZoneId(prev => prev === zone.id ? null : zone.id);
-        }
-      }
+      if (!isPanning) return; setIsPanning(false);
+      const dx = pos.x - dragLast.x, dy = pos.y - dragLast.y;
+      if (Math.abs(dx) < 4 && Math.abs(dy) < 4 && !isDrawing) { const z = hitTest(pos.x, pos.y); if (z) { if (mode === 'view') onZoneClick?.(z); else setSelZoneId(p => p === z.id ? null : z.id); } }
     }, [isPanning, dragLast, isDrawing, hitTest, mode, onZoneClick, transparent]);
 
     const handleDblClick = useCallback(() => {
-      if (isDrawing && drawPath.length >= 3) {
-        const normPath = transparent
-          ? drawPath   // already 0-1
-          : drawPath.map(imageToNorm);
-        onZoneAdd?.(normPath, `zone-${Date.now()}`);
-        setDrawPath([]); setNearStart(false);
-      }
-    }, [isDrawing, drawPath, onZoneAdd, transparent]);
+      if (isDrawing && drawPath.length >= 3) { onZoneAdd?.(transparent ? drawPath : drawPath.map(imageToNorm), `zone-${Date.now()}`); setDrawPath([]); setNearStart(false); }
+    }, [isDrawing, drawPath, onZoneAdd, transparent, imageToNorm]);
 
     const handleWheel = useCallback((e: React.WheelEvent) => {
-      if (transparent) return; // parent video handles visual size
+      if (transparent) return; e.preventDefault();
+      const pos = getMousePos(e);
+      const delta = e.deltaY > 0 ? -Z_STEP : Z_STEP;
+      const nz = Math.min(MAX_Z, Math.max(MIN_Z, zoomRef.current + delta));
+      if (nz === zoomRef.current) return;
+      panRef.current = { x: pos.x - (pos.x - panRef.current.x) * (nz / zoomRef.current), y: pos.y - (pos.y - panRef.current.y) * (nz / zoomRef.current) };
+      zoomRef.current = nz; rerender();
+    }, [transparent, rerender]);
+
+    // ── Touch handlers ────────────────────────────────────────────────────
+
+    const handleTouchStart = useCallback((e: React.TouchEvent) => {
       e.preventDefault();
-      const pos   = getCanvasPos(e);
-      const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
-      const newZ  = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoomRef.current + delta));
-      if (newZ === zoomRef.current) return;
-      panRef.current = {
-        x: pos.x - (pos.x - panRef.current.x) * (newZ / zoomRef.current),
-        y: pos.y - (pos.y - panRef.current.y) * (newZ / zoomRef.current),
-      };
-      zoomRef.current = newZ;
-      triggerRender();
-    }, [transparent, triggerRender]);
+      const ts = Array.from(e.touches);
+      const st = touch.current;
+      st.pinching = false; st.moved = false;
+      if (ts.length === 1) {
+        const r = canvasRef.current!.getBoundingClientRect();
+        st.tapStart = { x: ts[0].clientX - r.left, y: ts[0].clientY - r.top };
+        st.tapTime  = Date.now();
+      }
+      st.active = ts.map(t => ({ id: t.identifier, x: t.clientX, y: t.clientY }));
+    }, []);
+
+    const handleTouchMove = useCallback((e: React.TouchEvent) => {
+      e.preventDefault();
+      const ts  = Array.from(e.touches);
+      const st  = touch.current;
+      const prev = st.active;
+
+      if (ts.length >= 2 && prev.length >= 2) {
+        // ── Pinch zoom + two-finger pan ──────────────────────────────────
+        st.pinching = true; st.moved = true;
+        const p0 = prev.find(p => p.id === ts[0].identifier) ?? prev[0];
+        const p1 = prev.find(p => p.id === ts[1].identifier) ?? prev[1];
+        if (!p0 || !p1) { st.active = ts.map(t => ({ id: t.identifier, x: t.clientX, y: t.clientY })); return; }
+
+        const prevDist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+        const currDist = Math.hypot(ts[1].clientX - ts[0].clientX, ts[1].clientY - ts[0].clientY);
+        const ratio    = currDist / Math.max(prevDist, 1);
+
+        const prevMx = (p0.x + p1.x) / 2, prevMy = (p0.y + p1.y) / 2;
+        const currMx = (ts[0].clientX + ts[1].clientX) / 2;
+        const currMy = (ts[0].clientY + ts[1].clientY) / 2;
+        const pdx = currMx - prevMx, pdy = currMy - prevMy;
+
+        const r  = canvasRef.current!.getBoundingClientRect();
+        // canvas getBoundingClientRect() reflects the CSS transform:
+        //   r.left = tTx,  r.width = containerWidth * tScale
+        // So wrapper-local (original) coords of pinch midpoint:
+        //   origMx = (screenX - r.left) / tScale
+        // For the image-mode canvas (no CSS transform), mx is just screen-relative.
+        const mx = currMx - r.left;  // screen-relative, same space for both modes
+        const my = currMy - r.top;
+
+        if (transparent) {
+          const os  = tScale.current;
+          const ns  = Math.max(1, Math.min(MAX_Z, os * ratio));
+          // Wrapper-local anchor point (before scale change)
+          const origMx = mx / os;
+          const origMy = my / os;
+          // New tx keeps origMx at same screen position + adds finger pan
+          // screenPos = tTx + origPos * scale  =>  newTx = tTx + origMx*(os-ns) + pdx
+          const tx = tTx.current + origMx * (os - ns) + pdx;
+          const ty = tTy.current + origMy * (os - ns) + pdy;
+          const cl = clampTransparent(ns, tx, ty, r.width / os, r.height / os);
+          tScale.current = ns; tTx.current = cl.tx; tTy.current = cl.ty;
+          onTransparentZoom?.(ns, cl.tx, cl.ty);
+        } else {
+          const oz = zoomRef.current;
+          const nz = Math.max(MIN_Z, Math.min(MAX_Z, oz * ratio));
+          panRef.current = {
+            x: mx - (mx - panRef.current.x) * (nz / oz) + pdx,
+            y: my - (my - panRef.current.y) * (nz / oz) + pdy,
+          };
+          zoomRef.current = nz; rerender();
+        }
+
+      } else if (ts.length === 1 && !st.pinching) {
+        // ── Single-finger pan ────────────────────────────────────────────
+        const p = prev.find(q => q.id === ts[0].identifier) ?? prev[0];
+        if (!p) { st.active = ts.map(t => ({ id: t.identifier, x: t.clientX, y: t.clientY })); return; }
+        const dx = ts[0].clientX - p.x, dy = ts[0].clientY - p.y;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) st.moved = true;
+        if (st.moved && !isDrawing) {
+          if (transparent) {
+            // Only pan the canvas when zoomed in; at scale≈1 let page scroll
+            if (tScale.current > 1.05) {
+              const r = canvasRef.current!.getBoundingClientRect();
+              // r.width is scaled by CSS transform; divide to get original container size
+              const cw = r.width  / tScale.current;
+              const ch = r.height / tScale.current;
+              const cl = clampTransparent(tScale.current, tTx.current + dx, tTy.current + dy, cw, ch);
+              tTx.current = cl.tx; tTy.current = cl.ty;
+              onTransparentZoom?.(tScale.current, cl.tx, cl.ty);
+            }
+          } else {
+            panRef.current = { x: panRef.current.x + dx, y: panRef.current.y + dy };
+            rerender();
+          }
+        }
+      }
+
+      st.active = ts.map(t => ({ id: t.identifier, x: t.clientX, y: t.clientY }));
+    }, [transparent, onTransparentZoom, rerender, isDrawing]);
+
+    const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+      e.preventDefault();
+      const st = touch.current;
+
+      // ── Tap detection ────────────────────────────────────────────────
+      if (e.changedTouches.length === 1 && !st.moved && !st.pinching && st.tapStart) {
+        const elapsed = Date.now() - st.tapTime;
+        if (elapsed < 500) {
+          const pos = st.tapStart;
+          if (!isDrawing) {
+            const zone = hitTest(pos.x, pos.y);
+            if (zone) {
+              if (mode === 'view') onZoneClick?.(zone);
+              else setSelZoneId(p => p === zone.id ? null : zone.id);
+            }
+          } else {
+            // Tap adds draw point
+            if (transparent) {
+              const r  = canvasRef.current!.getBoundingClientRect();
+              const np: ZonePoint = { x: pos.x / r.width, y: pos.y / r.height };
+              if (nearStart && drawPath.length > 2) { onZoneAdd?.(drawPath, `zone-${Date.now()}`); setDrawPath([]); setNearStart(false); }
+              else setDrawPath(prev => [...prev, np]);
+            } else {
+              const ip: ZonePoint = { x: (pos.x - panRef.current.x) / zoomRef.current, y: (pos.y - panRef.current.y) / zoomRef.current };
+              if (nearStart && drawPath.length > 2) { onZoneAdd?.(drawPath.map(imageToNorm), `zone-${Date.now()}`); setDrawPath([]); setNearStart(false); }
+              else setDrawPath(prev => [...prev, ip]);
+            }
+          }
+        }
+      }
+
+      if (e.touches.length === 0) {
+        st.active = []; st.tapStart = null; st.moved = false; st.pinching = false;
+        setHoverZoneId(null);
+      } else {
+        // Transitioning from 2→1 fingers: reset pan baseline
+        st.active   = Array.from(e.touches).map(t => ({ id: t.identifier, x: t.clientX, y: t.clientY }));
+        st.tapStart = null; st.moved = false;
+      }
+    }, [isDrawing, hitTest, mode, onZoneClick, transparent, nearStart, drawPath, onZoneAdd, imageToNorm]);
+
+    // ── Keyboard ──────────────────────────────────────────────────────────
 
     useEffect(() => {
       const fn = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-          setDrawPath([]); setNearStart(false); setIsDrawing(false); setSelectedZoneId(null);
-        }
-        if ((e.key === 'Delete' || e.key === 'Backspace') && selectedZoneId && mode === 'edit') {
-          onZoneDelete?.(selectedZoneId); setSelectedZoneId(null);
-        }
+        if (e.key === 'Escape') { setDrawPath([]); setNearStart(false); setIsDrawing(false); setSelZoneId(null); }
+        if ((e.key === 'Delete' || e.key === 'Backspace') && selZoneId && mode === 'edit') { onZoneDelete?.(selZoneId); setSelZoneId(null); }
       };
-      window.addEventListener('keydown', fn);
-      return () => window.removeEventListener('keydown', fn);
-    }, [selectedZoneId, mode, onZoneDelete]);
+      window.addEventListener('keydown', fn); return () => window.removeEventListener('keydown', fn);
+    }, [selZoneId, mode, onZoneDelete]);
 
     const cursor = isDrawing
       ? (nearStart && drawPath.length > 2 ? 'pointer' : 'crosshair')
@@ -591,121 +567,60 @@ export const ImmersiveCanvas = forwardRef<ImmersiveCanvasRef, ImmersiveCanvasPro
       : transparent ? 'default'
       : 'grab';
 
+    // ── JSX ───────────────────────────────────────────────────────────────
+
     return (
-      <div ref={containerRef} className={`relative w-full h-full ${className}`}>
+      <div ref={containerRef} className={`relative w-full h-full select-none ${className}`}>
         <canvas
           ref={canvasRef}
-          style={{ cursor }}
+          style={{ cursor, touchAction: 'none' }}
           className="w-full h-full block"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onDoubleClick={handleDblClick}
           onWheel={handleWheel}
-          onContextMenu={(e) => e.preventDefault()}
+          onContextMenu={e => e.preventDefault()}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
         />
 
-        {/* Controls */}
+        {/* Zoom / reset controls */}
         <div className="absolute top-3 right-3 flex flex-col gap-1.5 z-10">
-          {!transparent && (
-            <>
-              <button
-                onClick={() => { zoomRef.current = Math.min(MAX_ZOOM, zoomRef.current + ZOOM_STEP); triggerRender(); }}
-                className="w-8 h-8 rounded-lg bg-black/60 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-sm border border-white/10"
-                title="Zoom in"
-              >
-                <ZoomIn className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => { zoomRef.current = Math.max(MIN_ZOOM, zoomRef.current - ZOOM_STEP); triggerRender(); }}
-                className="w-8 h-8 rounded-lg bg-black/60 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-sm border border-white/10"
-                title="Zoom out"
-              >
-                <ZoomOut className="w-4 h-4" />
-              </button>
-              <button
-                onClick={fitToContainer}
-                className="w-8 h-8 rounded-lg bg-black/60 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-sm border border-white/10"
-                title="Reset view"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </button>
-            </>
+          {!transparent && <>
+            <button onClick={() => { zoomRef.current = Math.min(MAX_Z, zoomRef.current + Z_STEP); rerender(); }} className="w-8 h-8 rounded-lg bg-black/60 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-sm border border-white/10"><ZoomIn className="w-4 h-4" /></button>
+            <button onClick={() => { zoomRef.current = Math.max(MIN_Z, zoomRef.current - Z_STEP); rerender(); }} className="w-8 h-8 rounded-lg bg-black/60 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-sm border border-white/10"><ZoomOut className="w-4 h-4" /></button>
+            <button onClick={fitToContainer} className="w-8 h-8 rounded-lg bg-black/60 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-sm border border-white/10"><RotateCcw className="w-4 h-4" /></button>
+          </>}
+          {transparent && (
+            <button onClick={fitToContainer} className="w-8 h-8 rounded-lg bg-black/60 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-sm border border-white/10" title="Reset zoom"><RotateCcw className="w-4 h-4" /></button>
           )}
-          {mode === 'edit' && (
-            <>
-              {!transparent && <div className="border-t border-white/10 my-0.5" />}
-              <button
-                onClick={() => { setIsDrawing(false); setDrawPath([]); setNearStart(false); }}
-                className={`w-8 h-8 rounded-lg flex items-center justify-center backdrop-blur-sm border text-white ${
-                  !isDrawing ? 'bg-white/20 border-white/40' : 'bg-black/60 border-white/10 hover:bg-black/80'
-                }`}
-                title="Select"
-              >
-                <MousePointer className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => { setIsDrawing(true); setDrawPath([]); setNearStart(false); }}
-                className={`w-8 h-8 rounded-lg flex items-center justify-center backdrop-blur-sm border text-white ${
-                  isDrawing ? 'bg-orange-500/80 border-orange-400' : 'bg-black/60 border-white/10 hover:bg-black/80'
-                }`}
-                title="Draw zone"
-              >
-                <Pencil className="w-4 h-4" />
-              </button>
-              {selectedZoneId && (
-                <button
-                  onClick={() => { onZoneDelete?.(selectedZoneId); setSelectedZoneId(null); }}
-                  className="w-8 h-8 rounded-lg bg-red-500/80 hover:bg-red-500 text-white flex items-center justify-center backdrop-blur-sm border border-red-400"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              )}
-            </>
-          )}
+          {mode === 'edit' && <>
+            {!transparent && <div className="border-t border-white/10 my-0.5" />}
+            <button onClick={() => { setIsDrawing(false); setDrawPath([]); setNearStart(false); }} className={`w-8 h-8 rounded-lg flex items-center justify-center backdrop-blur-sm border text-white ${!isDrawing ? 'bg-white/20 border-white/40' : 'bg-black/60 border-white/10 hover:bg-black/80'}`}><MousePointer className="w-4 h-4" /></button>
+            <button onClick={() => { setIsDrawing(true); setDrawPath([]); setNearStart(false); }} className={`w-8 h-8 rounded-lg flex items-center justify-center backdrop-blur-sm border text-white ${isDrawing ? 'bg-orange-500/80 border-orange-400' : 'bg-black/60 border-white/10 hover:bg-black/80'}`}><Pencil className="w-4 h-4" /></button>
+            {selZoneId && <button onClick={() => { onZoneDelete?.(selZoneId); setSelZoneId(null); }} className="w-8 h-8 rounded-lg bg-red-500/80 hover:bg-red-500 text-white flex items-center justify-center backdrop-blur-sm border border-red-400"><Trash2 className="w-4 h-4" /></button>}
+          </>}
         </div>
 
         {/* Drawing instructions */}
         {isDrawing && (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3">
-            <div className="bg-black/70 backdrop-blur-sm text-white px-4 py-2 rounded-full text-xs border border-white/10">
-              {drawPath.length === 0
-                ? 'Click to start drawing a zone'
-                : drawPath.length < 3
-                  ? `${drawPath.length} point${drawPath.length > 1 ? 's' : ''} — need at least 3`
-                  : nearStart
-                    ? 'Click to close the zone'
-                    : 'Continue clicking — double-click or click start to finish'}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 px-2">
+            <div className="bg-black/70 backdrop-blur-sm text-white px-4 py-2 rounded-full text-xs border border-white/10 whitespace-nowrap">
+              {drawPath.length === 0 ? 'Tap to start' : drawPath.length < 3 ? `${drawPath.length} pts — need 3+` : nearStart ? 'Tap to close' : 'Tap start to finish'}
             </div>
-            {drawPath.length >= 3 && (
-              <button
-                onClick={() => {
-                  const normPath = transparent ? drawPath : drawPath.map(imageToNorm);
-                  onZoneAdd?.(normPath, `zone-${Date.now()}`);
-                  setDrawPath([]); setNearStart(false);
-                }}
-                className="bg-orange-500 hover:bg-orange-400 text-white px-4 py-2 rounded-full text-xs font-semibold flex items-center gap-1.5"
-              >
-                <Check className="w-3.5 h-3.5" /> Finish Zone
-              </button>
-            )}
-            {drawPath.length > 0 && (
-              <button
-                onClick={() => { setDrawPath([]); setNearStart(false); }}
-                className="bg-black/60 text-white px-3 py-2 rounded-full text-xs border border-white/20"
-              >
-                <XIcon className="w-3.5 h-3.5" />
-              </button>
-            )}
+            {drawPath.length >= 3 && <button onClick={() => { onZoneAdd?.(transparent ? drawPath : drawPath.map(imageToNorm), `zone-${Date.now()}`); setDrawPath([]); setNearStart(false); }} className="bg-orange-500 text-white px-3 py-2 rounded-full text-xs font-semibold flex items-center gap-1"><Check className="w-3 h-3" /> Done</button>}
+            {drawPath.length > 0 && <button onClick={() => { setDrawPath([]); setNearStart(false); }} className="bg-black/60 text-white p-2 rounded-full border border-white/20"><XIcon className="w-3 h-3" /></button>}
           </div>
         )}
 
         {/* Legend */}
-        <div className="absolute bottom-3 left-3 flex items-center gap-3 pointer-events-none">
+        <div className="absolute bottom-3 left-3 flex items-center gap-2 pointer-events-none flex-wrap">
           {(['available', 'reserved', 'sold_out'] as ZoneStatus[]).map(s => (
             <div key={s} className="flex items-center gap-1 bg-black/60 backdrop-blur-sm px-2 py-1 rounded-lg border border-white/10">
-              <div className="w-2.5 h-2.5 rounded-full" style={{ background: zoneColor(s, 1) }} />
-              <span className="text-[10px] text-white/70 capitalize">{s.replace('_', ' ')}</span>
+              <div className="w-2 h-2 rounded-full" style={{ background: zoneColor(s, 1) }} />
+              <span className="text-[9px] text-white/70 capitalize">{s.replace('_', ' ')}</span>
             </div>
           ))}
         </div>
