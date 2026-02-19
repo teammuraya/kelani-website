@@ -25,6 +25,38 @@ const panoramaValidator = v.object({
   })),
 });
 
+// Zone point (normalized 0-1 coordinates for resolution independence)
+const zonePointValidator = v.object({
+  x: v.number(),
+  y: v.number(),
+});
+
+// Master plan zone (a building zone drawn on the site/master plan)
+const masterPlanZoneValidator = v.object({
+  id: v.string(),         // client-generated UUID
+  label: v.string(),      // e.g. "Block A", "Tower 1"
+  points: v.array(zonePointValidator),
+  buildingId: v.optional(v.id("project_buildings")),
+  status: v.union(
+    v.literal("available"),
+    v.literal("coming_soon"),
+    v.literal("sold_out"),
+  ),
+});
+
+// Building floor plan zone (a unit polygon drawn on the floor plan image)
+const buildingFloorZoneValidator = v.object({
+  id: v.string(),         // client-generated UUID
+  label: v.string(),      // e.g. "A101"
+  points: v.array(zonePointValidator),
+  unitId: v.optional(v.id("project_units")),
+  status: v.union(
+    v.literal("available"),
+    v.literal("reserved"),
+    v.literal("sold"),
+  ),
+});
+
 export default defineSchema({
   // ─── PROJECTS ─────────────────────────────────────────────────────────────
   projects: defineTable({
@@ -49,21 +81,47 @@ export default defineSchema({
     amenities: v.array(v.string()),
     completion_date: v.string(),
     featured: v.boolean(),
-    // New media fields
+    // Rich media
     exterior_media: v.optional(v.array(mediaItemValidator)),
     interior_media: v.optional(v.array(mediaItemValidator)),
     gallery_media: v.optional(v.array(mediaItemValidator)),
     panoramas: v.optional(v.array(panoramaValidator)),
     floor_plan_url: v.optional(v.string()),
     video_url: v.optional(v.string()),
+    // Master plan / site plan
+    master_plan_url: v.optional(v.string()),        // the site/master plan image
+    master_plan_zones: v.optional(v.array(masterPlanZoneValidator)), // drawn building zones
   })
     .index("by_slug", ["slug"])
     .index("by_featured", ["featured"])
     .index("by_status", ["status"]),
 
+  // ─── PROJECT BUILDINGS ────────────────────────────────────────────────────
+  project_buildings: defineTable({
+    projectId: v.id("projects"),
+    name: v.string(),
+    slug: v.string(),
+    description: v.optional(v.string()),
+    thumbnail_url: v.optional(v.string()),
+    // Floor plan image on which unit zones are drawn
+    floor_plan_url: v.optional(v.string()),
+    floor_plan_zones: v.optional(v.array(buildingFloorZoneValidator)),
+    // Rich media (same as units)
+    exterior_media: v.optional(v.array(mediaItemValidator)),
+    interior_media: v.optional(v.array(mediaItemValidator)),
+    gallery_media: v.optional(v.array(mediaItemValidator)),
+    panoramas: v.optional(v.array(panoramaValidator)),
+    displayOrder: v.optional(v.number()),
+    total_units: v.optional(v.number()),
+    floors: v.optional(v.number()),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_project_slug", ["projectId", "slug"]),
+
   // ─── PROJECT UNITS ────────────────────────────────────────────────────────
   project_units: defineTable({
     projectId: v.id("projects"),
+    buildingId: v.optional(v.id("project_buildings")),   // which building this unit is in
     name: v.string(),
     slug: v.string(),
     description: v.optional(v.string()),
@@ -89,6 +147,7 @@ export default defineSchema({
     displayOrder: v.optional(v.number()),
   })
     .index("by_project", ["projectId"])
+    .index("by_building", ["buildingId"])
     .index("by_project_slug", ["projectId", "slug"]),
 
   // ─── LOCATIONS ────────────────────────────────────────────────────────────

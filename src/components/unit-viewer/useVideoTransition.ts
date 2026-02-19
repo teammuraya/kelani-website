@@ -16,6 +16,7 @@ type TransitionState = {
   isPlaying: boolean;
   transitionVideo: MediaItem | null;
   pendingIndex: number | null;
+  progress: number;
 };
 
 const TRANSITION_TIMEOUT_MS = 15000;
@@ -28,9 +29,11 @@ export function useVideoTransition(
     isPlaying: false,
     transitionVideo: null,
     pendingIndex: null,
+    progress: 0,
   });
 
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const pendingRef = useRef<number | null>(null);
 
   const findTransition = useCallback(
@@ -44,19 +47,25 @@ export function useVideoTransition(
 
   const completeTransition = useCallback(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
     const target = pendingRef.current;
     pendingRef.current = null;
-    setState({ isPlaying: false, transitionVideo: null, pendingIndex: null });
+    setState({ isPlaying: false, transitionVideo: null, pendingIndex: null, progress: 100 });
     if (target !== null) onTransitionComplete(target);
   }, [onTransitionComplete]);
 
   const startTransition = useCallback(
-    (fromIndex: number, toIndex: number): boolean => {
+    (fromIndex: number, toIndex: number, estimatedDurationMs = 3000): boolean => {
       const transition = findTransition(fromIndex, toIndex);
       if (!transition) return false;
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
       pendingRef.current = toIndex;
-      setState({ isPlaying: true, transitionVideo: transition, pendingIndex: toIndex });
+      setState({ isPlaying: true, transitionVideo: transition, pendingIndex: toIndex, progress: 0 });
+      const progressStep = 100 / (estimatedDurationMs / 100);
+      progressIntervalRef.current = setInterval(() => {
+        setState((prev) => ({ ...prev, progress: Math.min(prev.progress + progressStep, 95) }));
+      }, 100);
       timeoutRef.current = setTimeout(completeTransition, TRANSITION_TIMEOUT_MS);
       return true;
     },
@@ -67,8 +76,9 @@ export function useVideoTransition(
 
   const cancelTransition = useCallback(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
     pendingRef.current = null;
-    setState({ isPlaying: false, transitionVideo: null, pendingIndex: null });
+    setState({ isPlaying: false, transitionVideo: null, pendingIndex: null, progress: 0 });
   }, []);
 
   const hasTransition = useCallback(
@@ -76,11 +86,18 @@ export function useVideoTransition(
     [findTransition]
   );
 
-  useEffect(() => () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); }, []);
+  useEffect(
+    () => () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    },
+    []
+  );
 
   return {
     isPlayingTransition: state.isPlaying,
     transitionVideo: state.transitionVideo,
+    transitionProgress: state.progress,
     startTransition,
     completeTransition,
     handleTransitionError,

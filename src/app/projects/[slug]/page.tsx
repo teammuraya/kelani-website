@@ -20,6 +20,7 @@ import {
   X,
   Maximize2,
   Building2,
+  Map,
 } from 'lucide-react';
 import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
@@ -520,6 +521,12 @@ export default function ProjectDetail() {
                   </button>
                 )}
                 <Link
+                  href={`/projects/${slug}/explore`}
+                  className="block text-center px-4 py-3 bg-white/10 hover:bg-white/20 border border-white/20 text-white text-sm font-semibold rounded-xl transition-all flex items-center justify-center gap-2"
+                >
+                  <Map className="w-4 h-4" /> Explore Site Plan
+                </Link>
+                <Link
                   href={`/projects/${slug}/units`}
                   className="block text-center px-4 py-3 bg-olive-500 hover:bg-olive-400 text-white text-sm font-bold rounded-xl transition-all"
                 >
@@ -615,6 +622,9 @@ export default function ProjectDetail() {
                   <Compass className="w-4 h-4" /> 360° Tour
                 </button>
               )}
+              <Link href={`/projects/${slug}/explore`} className="block text-center py-3 bg-white/10 hover:bg-white/20 border border-white/20 text-white text-sm font-semibold rounded-xl flex items-center justify-center gap-2">
+                <Map className="w-4 h-4" /> Explore Site Plan
+              </Link>
               <Link href={`/projects/${slug}/units`} className="block text-center py-3 bg-olive-500 hover:bg-olive-400 text-white text-sm font-bold rounded-xl">
                 Explore Units & Take Tour →
               </Link>
@@ -750,6 +760,13 @@ export default function ProjectDetail() {
                 )}
 
                 <div className="mt-6 space-y-3">
+                  <Link
+                    href={`/projects/${slug}/explore`}
+                    className="block text-center px-6 py-3.5 bg-charcoal-900 text-white text-sm font-medium rounded-full hover:bg-charcoal-800 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Map className="w-4 h-4" />
+                    Explore Site Plan
+                  </Link>
                   {/* Take Tour CTA */}
                   <Link
                     href={`/projects/${slug}/units`}
@@ -783,14 +800,23 @@ export default function ProjectDetail() {
           <p className="text-white/50 text-lg max-w-xl mx-auto mb-8">
             Browse available units, view virtual tours, and explore 360° panoramas of {project.name}.
           </p>
-          <Link
-            href={`/projects/${slug}/units`}
-            className="inline-flex items-center gap-3 px-8 py-4 bg-olive-500 hover:bg-olive-400 text-white font-bold text-sm uppercase tracking-widest rounded-full transition-all shadow-xl"
-          >
-            <Building2 className="w-5 h-5" />
-            Browse Units & Take Tour
-            <ArrowRight className="w-5 h-5" />
-          </Link>
+          <div className="flex flex-wrap items-center justify-center gap-4">
+            <Link
+              href={`/projects/${slug}/explore`}
+              className="inline-flex items-center gap-3 px-8 py-4 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold text-sm uppercase tracking-widest rounded-full transition-all"
+            >
+              <Map className="w-5 h-5" />
+              Site Plan
+            </Link>
+            <Link
+              href={`/projects/${slug}/units`}
+              className="inline-flex items-center gap-3 px-8 py-4 bg-olive-500 hover:bg-olive-400 text-white font-bold text-sm uppercase tracking-widest rounded-full transition-all shadow-xl"
+            >
+              <Building2 className="w-5 h-5" />
+              Browse Units & Take Tour
+              <ArrowRight className="w-5 h-5" />
+            </Link>
+          </div>
         </div>
       </section>
 

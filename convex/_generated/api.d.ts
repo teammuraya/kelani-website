@@ -10,7 +10,9 @@
 
 import type * as adminUsers from "../adminUsers.js";
 import type * as contactSubmissions from "../contactSubmissions.js";
+import type * as files from "../files.js";
 import type * as locations from "../locations.js";
+import type * as projectBuildings from "../projectBuildings.js";
 import type * as projectUnits from "../projectUnits.js";
 import type * as projects from "../projects.js";
 import type * as seed from "../seed.js";
@@ -24,7 +26,9 @@ import type {
 declare const fullApi: ApiFromModules<{
   adminUsers: typeof adminUsers;
   contactSubmissions: typeof contactSubmissions;
+  files: typeof files;
   locations: typeof locations;
+  projectBuildings: typeof projectBuildings;
   projectUnits: typeof projectUnits;
   projects: typeof projects;
   seed: typeof seed;

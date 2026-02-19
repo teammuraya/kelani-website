@@ -112,6 +112,8 @@ export const update = mutation({
     interior_media: v.optional(v.array(v.any())),
     gallery_media: v.optional(v.array(v.any())),
     panoramas: v.optional(v.array(v.any())),
+    master_plan_url: v.optional(v.string()),
+    master_plan_zones: v.optional(v.array(v.any())),
   },
   handler: async (ctx, { id, ...fields }) => {
     await ctx.db.patch(id, fields);
