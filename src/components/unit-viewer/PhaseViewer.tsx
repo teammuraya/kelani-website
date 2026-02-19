@@ -16,8 +16,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Map, Images, Compass,
-  X, ChevronRight as Chevron, Home, ArrowRight, Maximize2,
-  Check, Loader2, RotateCcw,
+  X, ChevronRight as Chevron, Home, ArrowRight,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { PanoramaModal } from '@/components/unit-viewer/PanoramaModal';
@@ -45,6 +44,7 @@ type Unit = {
   area_sqft: number; price: number;
   status: 'available' | 'reserved' | 'sold';
   unit_type?: string; thumbnail_url?: string;
+  banner_image_url?: string;
   floor_number?: number; description?: string;
 };
 type PhaseUnitZone = {
@@ -88,70 +88,90 @@ function UnitPopup({ unit, phaseSlug, projectSlug, onClose, onExplore }: {
   onClose: () => void; onExplore: () => void;
 }) {
   return (
-    <div className="absolute inset-0 z-40 flex items-end md:items-center justify-center pointer-events-none">
-      {/* Backdrop — only behind popup */}
-      <div
-        className="absolute inset-0 bg-black/30 pointer-events-auto"
-        onClick={onClose}
-      />
+    <div className="absolute inset-0 z-40 flex items-end md:items-center justify-end pointer-events-none">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/40 pointer-events-auto" onClick={onClose} />
 
-      {/* Popup card */}
-      <div className="relative pointer-events-auto w-full md:w-auto md:max-w-sm mx-4 mb-4 md:mb-0 md:mr-8 md:ml-auto z-10">
-        <div className="bg-black/80 backdrop-blur-xl border border-white/15 rounded-2xl p-5 shadow-2xl">
-          {/* Header */}
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <div className="text-white/50 text-[10px] uppercase tracking-wider">{unit.unit_type ?? 'Unit'}</div>
-              <h3 className="text-white font-bold text-lg leading-tight">{unit.name}</h3>
-            </div>
-            <button onClick={onClose}
-              className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white ml-3 flex-shrink-0">
+      {/* Popup card — slides up from bottom on mobile, right-anchored on desktop */}
+      <div className="relative pointer-events-auto w-full md:w-[360px] md:max-w-[360px] md:mr-8 z-10 flex flex-col">
+        <div className="bg-[#0f0f0f]/95 backdrop-blur-2xl border border-white/10 rounded-t-3xl md:rounded-3xl shadow-2xl overflow-hidden">
+
+          {/* ── Hero image banner ── */}
+          <div className="relative h-48 md:h-52 w-full bg-gray-900 overflow-hidden">
+            {(unit.banner_image_url || unit.thumbnail_url) ? (
+              <img
+                src={unit.banner_image_url || unit.thumbnail_url}
+                alt={unit.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
+                <Home className="w-10 h-10 text-white/20" />
+              </div>
+            )}
+            {/* gradient fade into card body */}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0f0f0f]/90 via-[#0f0f0f]/20 to-transparent" />
+
+            {/* close button */}
+            <button
+              onClick={onClose}
+              className="absolute top-3 right-3 p-2 rounded-full bg-black/50 hover:bg-black/70 text-white backdrop-blur-sm"
+            >
               <X className="w-4 h-4" />
             </button>
-          </div>
 
-          {/* Thumbnail */}
-          {unit.thumbnail_url && (
-            <div className="rounded-xl overflow-hidden mb-4 aspect-video w-full">
-              <img src={unit.thumbnail_url} alt={unit.name} className="w-full h-full object-cover" />
-            </div>
-          )}
-
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-3 mb-4">
-            {[
-              { label: 'Beds',  value: String(unit.bedrooms) },
-              { label: 'Baths', value: String(unit.bathrooms) },
-              { label: 'Area',  value: `${unit.area_sqft.toLocaleString()} ft²` },
-            ].map(({ label, value }) => (
-              <div key={label} className="bg-white/5 rounded-xl p-2.5 text-center">
-                <div className="text-white/50 text-[9px] uppercase tracking-wider">{label}</div>
-                <div className="text-white font-bold text-sm mt-0.5">{value}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Price + status */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="text-white font-bold text-xl">{formatPrice(unit.price)}</div>
-            <span className={`px-3 py-1 rounded-full text-xs font-semibold capitalize ${statusColor(unit.status)}`}>
+            {/* status badge overlaid on image */}
+            <span className={`absolute bottom-3 left-4 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${statusColor(unit.status)}`}>
               {unit.status}
             </span>
           </div>
 
-          {/* Actions */}
-          <div className="flex gap-2">
-            <Link
-              href={`/projects/${projectSlug}/units/${unit.slug}`}
-              className="flex-1 bg-white text-gray-900 font-bold py-3 rounded-xl text-xs uppercase tracking-wide text-center flex items-center justify-center gap-1.5 hover:bg-gray-100"
-              onClick={onExplore}
-            >
-              Explore Unit <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-            <Link href="/contact"
-              className="px-4 py-3 bg-olive-500 hover:bg-olive-400 text-white font-bold rounded-xl text-xs uppercase tracking-wide flex items-center justify-center">
-              Enquire
-            </Link>
+          {/* ── Card body ── */}
+          <div className="p-5">
+            {/* Name + type */}
+            <div className="mb-4">
+              <div className="text-white/40 text-[10px] uppercase tracking-widest mb-0.5">{unit.unit_type ?? 'Unit'}</div>
+              <h3 className="text-white font-bold text-xl leading-tight">{unit.name}</h3>
+            </div>
+
+            {/* Stats row */}
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {[
+                { label: 'Beds',  value: `${unit.bedrooms}BR` },
+                { label: 'Baths', value: `${unit.bathrooms}BA` },
+                { label: 'Area',  value: `${unit.area_sqft >= 1000 ? `${(unit.area_sqft/1000).toFixed(1)}K` : unit.area_sqft} ft²` },
+              ].map(({ label, value }) => (
+                <div key={label} className="bg-white/5 rounded-xl p-2.5 text-center border border-white/5">
+                  <div className="text-white/40 text-[9px] uppercase tracking-wider">{label}</div>
+                  <div className="text-white font-bold text-sm mt-0.5">{value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Price */}
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <div className="text-white/40 text-[9px] uppercase tracking-wider">Price</div>
+                <div className="text-white font-bold text-2xl">{formatPrice(unit.price)}</div>
+              </div>
+            </div>
+
+            {/* CTA buttons */}
+            <div className="flex gap-2">
+              <Link
+                href={`/projects/${projectSlug}/units/${unit.slug}`}
+                className="flex-1 bg-white text-gray-900 font-bold py-3.5 rounded-2xl text-xs uppercase tracking-wide text-center flex items-center justify-center gap-1.5 hover:bg-gray-100 transition-colors"
+                onClick={onExplore}
+              >
+                Explore Unit <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+              <Link
+                href="/contact"
+                className="px-5 py-3.5 bg-olive-500 hover:bg-olive-400 text-white font-bold rounded-2xl text-xs uppercase tracking-wide flex items-center justify-center transition-colors"
+              >
+                Enquire
+              </Link>
+            </div>
           </div>
         </div>
       </div>
@@ -297,7 +317,7 @@ export default function PhaseViewer({ phase, units, projectSlug, projectName }: 
       const unit = units.find(u => u._id === zone.meta!.unitId);
       if (unit) {
         setSelectedUnit(unit);
-        // Zoom into the zone smoothly
+        setHighlightedZoneId(zone.id); // keep zone lit while popup is open
         canvasRef.current?.zoomToZone(zone.id);
         return;
       }

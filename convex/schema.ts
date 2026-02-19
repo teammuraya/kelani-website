@@ -171,6 +171,7 @@ export default defineSchema({
     floor_number: v.optional(v.number()),
     unit_type: v.optional(v.string()),
     thumbnail_url: v.optional(v.string()),
+    banner_image_url: v.optional(v.string()),
     floor_plan_url: v.optional(v.string()),
     exterior_media: v.optional(v.array(mediaItemValidator)),
     interior_media: v.optional(v.array(mediaItemValidator)),

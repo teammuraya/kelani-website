@@ -46,6 +46,7 @@ export type UnitData = {
   floor_number?: number;
   unit_type?: string;
   thumbnail_url?: string;
+  banner_image_url?: string;
   floor_plan_url?: string;
   exterior_media?: MediaItem[];
   interior_media?: MediaItem[];
@@ -537,16 +538,36 @@ export default function UnitViewer({
           DESKTOP: Left Specs Panel  (top-40 left-8 z-30 w-[340px])
           Exact same layout as HouseDetailsView
       ───────────────────────────────────────────────────────────────────── */}
-      <div className="hidden md:block absolute top-40 left-8 z-30 w-[340px]">
-        <div className="space-y-5">
+      <div className="hidden md:block absolute top-28 left-8 z-30 w-[340px]">
+        <div className="space-y-4">
 
-          {/* Unit code / name — large like "house code" in HouseDetailsView */}
+          {/* ── Image banner card ── */}
+          <div className="relative rounded-2xl overflow-hidden h-44 bg-gray-900 shadow-2xl">
+            {(unit.banner_image_url || unit.thumbnail_url) ? (
+              <img src={unit.banner_image_url || unit.thumbnail_url} alt={unit.name} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900" />
+            )}
+            {/* gradient bottom fade */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+            {/* status badge */}
+            <span className={`absolute bottom-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${statusCls(unit.status)}`}>
+              {unit.status}
+            </span>
+            {/* unit type */}
+            {unit.unit_type && (
+              <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-black/50 text-white/80 backdrop-blur-sm">
+                {unit.unit_type}
+              </span>
+            )}
+          </div>
+
+          {/* Unit name */}
           <div>
             <div className="text-white/50 text-[9px] uppercase tracking-wider font-medium mb-1">
               {unit.unit_type ?? 'Unit'}
             </div>
-            <div className="text-white text-7xl font-bold tracking-tight leading-none">
-              {/* Show first 2 words or the whole name if short */}
+            <div className="text-white text-6xl font-bold tracking-tight leading-none">
               {unit.name.split(/\s+/).slice(0, 2).join(' ')}
             </div>
             <div className="text-white/40 text-sm mt-1">{unit.name}</div>
@@ -741,8 +762,27 @@ export default function UnitViewer({
       {/* ─────────────────────────────────────────────────────────────────────
           MOBILE: Specs card  (same structure as HouseDetailsView)
       ───────────────────────────────────────────────────────────────────── */}
-      <div className="md:hidden relative bg-black p-4 pb-10">
+      <div className="md:hidden relative bg-black pb-10">
         <div className="space-y-5">
+
+          {/* ── Mobile banner image ── */}
+          {(unit.banner_image_url || unit.thumbnail_url) && (
+            <div className="relative h-48 overflow-hidden">
+              <img src={unit.banner_image_url || unit.thumbnail_url} alt={unit.name} className="w-full h-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
+              <div className="absolute bottom-0 left-0 right-0 p-4 flex items-end justify-between">
+                <div>
+                  <div className="text-white/50 text-[9px] uppercase tracking-wider">{unit.unit_type ?? 'Unit'}</div>
+                  <div className="text-white font-bold text-xl">{unit.name}</div>
+                </div>
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${statusCls(unit.status)}`}>
+                  {unit.status}
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div className="px-4">
           <div className="grid grid-cols-3 gap-3 text-center">
             <div className="space-y-1">
               <div className="text-white/50 text-[10px] uppercase tracking-wide">Unit</div>
@@ -809,6 +849,7 @@ export default function UnitViewer({
               ← Back to Units
             </Link>
           </div>
+          </div> {/* end px-4 */}
         </div>
       </div>
 
