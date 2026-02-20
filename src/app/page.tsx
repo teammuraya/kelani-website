@@ -6,7 +6,7 @@ import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import ProjectCard from '@/components/ProjectCard';
 import LocationCard from '@/components/LocationCard';
-import { AfricanDividerLight, AfricanDividerDark, AfricanSectionOverlay, ScrollingAfricanBand } from '@/components/AfricanPatterns';
+import { AfricanDividerDark, AfricanSectionOverlay, ScrollingAfricanBand } from '@/components/AfricanPatterns';
 import { useScrollAnimation } from '@/hooks/useScrollAnimation';
 
 function AnimatedSection({ children, className = '' }: { children: React.ReactNode; className?: string }) {
@@ -23,16 +23,32 @@ function AnimatedSection({ children, className = '' }: { children: React.ReactNo
   );
 }
 
+const IMG_DEFAULTS = {
+  hero_bg: 'https://images.pexels.com/photos/2462015/pexels-photo-2462015.jpeg?auto=compress&cs=tinysrgb&w=1920',
+  hero_thumb_1: 'https://images.pexels.com/photos/1571460/pexels-photo-1571460.jpeg?auto=compress&cs=tinysrgb&w=400',
+  hero_thumb_2: 'https://images.pexels.com/photos/2901209/pexels-photo-2901209.jpeg?auto=compress&cs=tinysrgb&w=400',
+  card_amenities: 'https://images.pexels.com/photos/1396122/pexels-photo-1396122.jpeg?auto=compress&cs=tinysrgb&w=800',
+  card_floor_plans: 'https://images.pexels.com/photos/1571460/pexels-photo-1571460.jpeg?auto=compress&cs=tinysrgb&w=800',
+  card_neighbourhood: 'https://images.pexels.com/photos/2901209/pexels-photo-2901209.jpeg?auto=compress&cs=tinysrgb&w=800',
+  about_main: 'https://images.pexels.com/photos/2079234/pexels-photo-2079234.jpeg?auto=compress&cs=tinysrgb&w=800',
+  about_detail: 'https://images.pexels.com/photos/1571460/pexels-photo-1571460.jpeg?auto=compress&cs=tinysrgb&w=400',
+  cta_bg: 'https://images.pexels.com/photos/2724749/pexels-photo-2724749.jpeg?auto=compress&cs=tinysrgb&w=1920',
+};
+
 export default function Home() {
   const featuredProjects = useQuery(api.projects.getFeatured);
   const locations = useQuery(api.locations.getTopFour);
+  const homepageContent = useQuery(api.homepageContent.get);
   const loading = featuredProjects === undefined || locations === undefined;
+
+  const img = (key: keyof typeof IMG_DEFAULTS) =>
+    ((homepageContent as Record<string, unknown> | null | undefined)?.[key] as string | undefined) || IMG_DEFAULTS[key];
 
   return (
     <div className="bg-charcoal-900">
       <section className="relative min-h-screen flex items-end pb-20 overflow-hidden">
         <img
-          src="https://images.pexels.com/photos/2462015/pexels-photo-2462015.jpeg?auto=compress&cs=tinysrgb&w=1920"
+          src={img('hero_bg')}
           alt="Kelani Developments"
           className="absolute inset-0 w-full h-full object-cover"
         />
@@ -51,8 +67,8 @@ export default function Home() {
 
               <h1 className="font-display text-5xl md:text-6xl lg:text-7xl text-white font-semibold leading-[1.05] mb-6 text-shadow-lg">
                 Your Property.
-                <br />
-                Your Legacy.
+                
+                
                 <br />
                 Your Story.
               </h1>
@@ -88,14 +104,14 @@ export default function Home() {
                 <div className="flex gap-3">
                   <div className="w-40 h-28 rounded-xl overflow-hidden">
                     <img
-                      src="https://images.pexels.com/photos/1571460/pexels-photo-1571460.jpeg?auto=compress&cs=tinysrgb&w=400"
+                      src={img('hero_thumb_1')}
                       alt="Interior"
                       className="w-full h-full object-cover"
                     />
                   </div>
                   <div className="w-40 h-28 rounded-xl overflow-hidden relative group cursor-pointer">
                     <img
-                      src="https://images.pexels.com/photos/2901209/pexels-photo-2901209.jpeg?auto=compress&cs=tinysrgb&w=400"
+                      src={img('hero_thumb_2')}
                       alt="Interior"
                       className="w-full h-full object-cover"
                     />
@@ -112,49 +128,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="bg-white py-20 lg:py-28 relative">
-        <AfricanSectionOverlay variant="light" />
-        <div className="max-w-7xl mx-auto px-6 lg:px-8 relative z-10">
-          <AnimatedSection>
-            <div className="grid md:grid-cols-3 gap-6">
-              {[
-                {
-                  image: 'https://images.pexels.com/photos/1396122/pexels-photo-1396122.jpeg?auto=compress&cs=tinysrgb&w=800',
-                  label: 'Amenities',
-                },
-                {
-                  image: 'https://images.pexels.com/photos/1571460/pexels-photo-1571460.jpeg?auto=compress&cs=tinysrgb&w=800',
-                  label: 'Floor Plans',
-                },
-                {
-                  image: 'https://images.pexels.com/photos/2901209/pexels-photo-2901209.jpeg?auto=compress&cs=tinysrgb&w=800',
-                  label: 'Neighbourhood',
-                },
-              ].map((card) => (
-                <div
-                  key={card.label}
-                  className="group relative rounded-2xl overflow-hidden h-[320px] cursor-pointer"
-                >
-                  <img
-                    src={card.image}
-                    alt={card.label}
-                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                  <div className="absolute bottom-0 left-0 right-0 p-6 flex items-center justify-between">
-                    <span className="text-white font-medium text-lg">{card.label}</span>
-                    <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center group-hover:bg-olive-500 transition-colors duration-300">
-                      <ArrowRight className="w-4 h-4 text-charcoal-900 group-hover:text-white transition-colors" />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </AnimatedSection>
-        </div>
-      </section>
-
-      <AfricanDividerLight />
+      {/* Feature cards section + divider removed */}
 
       <section className="bg-sand-100 py-20 lg:py-28 relative">
         <AfricanSectionOverlay variant="light" />
@@ -164,14 +138,14 @@ export default function Home() {
               <div className="relative">
                 <div className="rounded-2xl overflow-hidden h-[500px]">
                   <img
-                    src="https://images.pexels.com/photos/2079234/pexels-photo-2079234.jpeg?auto=compress&cs=tinysrgb&w=800"
+                    src={img('about_main')}
                     alt="About Kelani"
                     className="w-full h-full object-cover"
                   />
                 </div>
                 <div className="absolute -bottom-6 -right-6 w-48 h-48 rounded-2xl overflow-hidden border-4 border-sand-100 hidden lg:block">
                   <img
-                    src="https://images.pexels.com/photos/1571460/pexels-photo-1571460.jpeg?auto=compress&cs=tinysrgb&w=400"
+                    src={img('about_detail')}
                     alt="Interior detail"
                     className="w-full h-full object-cover"
                   />
@@ -331,7 +305,7 @@ export default function Home() {
 
       <section className="relative py-32 overflow-hidden">
         <img
-          src="https://images.pexels.com/photos/2724749/pexels-photo-2724749.jpeg?auto=compress&cs=tinysrgb&w=1920"
+          src={img('cta_bg')}
           alt="CTA background"
           className="absolute inset-0 w-full h-full object-cover"
         />

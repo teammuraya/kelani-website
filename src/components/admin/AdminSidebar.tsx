@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Building2,
   Users,
+  Home,
   X,
   ChevronRight,
   ExternalLink,
@@ -14,6 +15,7 @@ import {
 
 const NAV = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
+  { href: '/admin/homepage', label: 'Homepage', icon: Home },
   { href: '/admin/projects', label: 'Projects', icon: Building2 },
   { href: '/admin/admins', label: 'Admin Users', icon: Users },
 ];

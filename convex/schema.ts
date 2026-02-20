@@ -206,6 +206,19 @@ export default defineSchema({
     project_interest: v.string(),
   }),
 
+  // ─── HOMEPAGE CONTENT ─────────────────────────────────────────────────
+  homepage_content: defineTable({
+    hero_bg: v.optional(v.string()),
+    hero_thumb_1: v.optional(v.string()),
+    hero_thumb_2: v.optional(v.string()),
+    card_amenities: v.optional(v.string()),
+    card_floor_plans: v.optional(v.string()),
+    card_neighbourhood: v.optional(v.string()),
+    about_main: v.optional(v.string()),
+    about_detail: v.optional(v.string()),
+    cta_bg: v.optional(v.string()),
+  }),
+
   // ─── ADMIN USERS ──────────────────────────────────────────────────────────
   admin_users: defineTable({
     clerkUserId: v.string(),

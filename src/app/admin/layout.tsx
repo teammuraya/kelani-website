@@ -52,17 +52,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Mobile header */}
-      <header className="md:hidden fixed top-0 left-0 right-0 h-14 bg-charcoal-900 z-40 flex items-center px-4 gap-3">
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="p-2 text-white hover:bg-white/10 rounded-lg"
-        >
-          <Menu className="w-5 h-5" />
-        </button>
-        <span className="text-white font-semibold">Kelani Admin</span>
-      </header>
-
       {/* Mobile backdrop */}
       {sidebarOpen && (
         <div
@@ -73,7 +62,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       <AdminSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      <main className="pt-14 md:pt-0 md:ml-64 min-h-screen">
+      <main className="md:ml-64 min-h-screen">
+        <div className="md:hidden flex items-center gap-3 px-6 pt-4">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-2 bg-charcoal-900 text-white rounded-lg"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <span className="text-gray-900 font-semibold text-sm">Kelani Admin</span>
+        </div>
         <div className="p-6 md:p-8">{children}</div>
       </main>
     </div>
