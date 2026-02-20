@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '@convex/_generated/api';
+import { Id } from '@convex/_generated/dataModel';
 import { Upload, X, Loader2, Save, Image as ImageIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -109,7 +110,7 @@ export default function AdminHomepage() {
         xhr.setRequestHeader('Content-Type', file.type);
         xhr.send(file);
       });
-      const url = await getStorageUrl({ storageId });
+      const url = await getStorageUrl({ storageId: storageId as Id<"_storage"> });
       if (url) {
         setOverrides((prev) => ({ ...prev, [key]: url }));
         toast.success(`${key.replace(/_/g, ' ')} uploaded`);
