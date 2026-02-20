@@ -320,6 +320,17 @@ export const ImmersiveCanvas = forwardRef<ImmersiveCanvasRef, ImmersiveCanvasPro
       if (!ctx || !cv) return;
       const z = zoomRef.current, p = panRef.current;
       const W = cv.width / DPR, H = cv.height / DPR;
+
+      // DEBUG: Log canvas and videoDisplayArea state
+      console.log('[ImmersiveCanvas Debug] transparent:', transparent);
+      console.log('[ImmersiveCanvas Debug] videoDisplayArea ready:', videoDisplayArea?.ready);
+      console.log('[ImmersiveCanvas Debug] canvas W x H:', W, H);
+      if (videoDisplayArea?.ready) {
+        console.log('[ImmersiveCanvas Debug] video offset:', videoDisplayArea.offsetX, videoDisplayArea.offsetY);
+        console.log('[ImmersiveCanvas Debug] video display size:', videoDisplayArea.displayWidth, videoDisplayArea.displayHeight);
+      }
+      console.log('[ImmersiveCanvas Debug] zones count:', zones.length);
+
       ctx.save(); ctx.scale(DPR, DPR); ctx.clearRect(0, 0, W, H);
 
       if (!transparent) {

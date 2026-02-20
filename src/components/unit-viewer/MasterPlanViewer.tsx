@@ -236,6 +236,20 @@ export default function MasterPlanViewer({ project, phases }: {
     meta: { phaseId: z.phaseId },
   })), [project.master_plan_zones, isMobile]);
 
+  // DEBUG: Log zone alignment info for mobile debugging
+  useEffect(() => {
+    console.log('[MasterPlanViewer Debug] videoDisplayArea:', videoDisplayArea);
+    console.log('[MasterPlanViewer Debug] isMobile:', isMobile);
+    console.log('[MasterPlanViewer Debug] zones count:', canvasZones.length);
+    if (canvasZones.length > 0) {
+      console.log('[MasterPlanViewer Debug] first zone points:', canvasZones[0].points);
+      const zone = project.master_plan_zones?.[0];
+      if (zone) {
+        console.log('[MasterPlanViewer Debug] first zone has mobile_points:', !!(zone.mobile_points && zone.mobile_points.length > 0));
+      }
+    }
+  }, [videoDisplayArea, isMobile, canvasZones, project.master_plan_zones]);
+
   const handleZoneClick = useCallback((zone: CanvasZone) => {
     if (zone.meta?.phaseId) {
       const ph = phases.find(p => p._id === zone.meta!.phaseId);
@@ -337,26 +351,14 @@ export default function MasterPlanViewer({ project, phases }: {
       </div>
 
       {/* ── MOBILE CANVAS — full height below header ──────────────── */}
-      <div className="relative md:hidden flex-1 flex items-center justify-center bg-black" style={{ minHeight: 'calc(100vh - 160px)' }}>
-
-        {/* Sitemap canvas - fixed 9:19.5 aspect ratio to match admin mobile preview */}
-        {tab === 'sitemap' && hasMasterPlan && (
-          <div
-            className="relative overflow-hidden"
-            style={{
-              width: 'min(100%, calc((100vh - 160px) * 9 / 19.5))',
-              aspectRatio: '9 / 19.5',
-            }}
-          >
-            {renderSitemapCanvas()}
-            {/* Mobile pinch hint */}
-            {canvasZones.length > 0 && (
-              <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-                <div className="bg-black/60 backdrop-blur-sm text-white/70 text-[10px] px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-1.5">
-                  <ZoomIn className="w-3 h-3" /> Pinch to zoom · Tap a zone
-                </div>
-              </div>
-            )}
+      <div className="relative md:hidden flex-1" style={{ minHeight: 'calc(100vh - 160px)' }}>
+        {tab === 'sitemap' && hasMasterPlan && renderSitemapCanvas()}
+        {/* Mobile pinch hint */}
+        {tab === 'sitemap' && hasMasterPlan && canvasZones.length > 0 && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+            <div className="bg-black/60 backdrop-blur-sm text-white/70 text-[10px] px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-1.5">
+              <ZoomIn className="w-3 h-3" /> Pinch to zoom · Tap a zone
+            </div>
           </div>
         )}
 

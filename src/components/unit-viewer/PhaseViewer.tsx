@@ -266,6 +266,20 @@ export default function PhaseViewer({ phase, units, projectSlug, projectName }: 
     meta: { unitId: z.unitId },
   })), [phase.phase_unit_zones, isMobile]);
 
+  // DEBUG: Log zone alignment info for mobile debugging
+  useEffect(() => {
+    console.log('[PhaseViewer Debug] videoDisplayArea:', videoDisplayArea);
+    console.log('[PhaseViewer Debug] isMobile:', isMobile);
+    console.log('[PhaseViewer Debug] zones count:', canvasZones.length);
+    if (canvasZones.length > 0) {
+      console.log('[PhaseViewer Debug] first zone points:', canvasZones[0].points);
+      const zone = phase.phase_unit_zones?.[0];
+      if (zone) {
+        console.log('[PhaseViewer Debug] first zone has mobile_points:', !!(zone.mobile_points && zone.mobile_points.length > 0));
+      }
+    }
+  }, [videoDisplayArea, isMobile, canvasZones, phase.phase_unit_zones]);
+
   const handleZoneClick = useCallback((zone: CanvasZone) => {
     if (zone.meta?.unitId) {
       const unit = units.find(u => u._id === zone.meta!.unitId);
@@ -379,25 +393,14 @@ export default function PhaseViewer({ phase, units, projectSlug, projectName }: 
       </div>
 
       {/* ── MOBILE CANVAS — full height below header ──────────────── */}
-      <div className="relative md:hidden flex-1 flex items-center justify-center bg-black" style={{ minHeight: 'calc(100vh - 160px)' }}>
-        {/* Phase plan canvas - fixed 9:19.5 aspect ratio to match admin mobile preview */}
-        {tab === 'phase-plan' && hasPhasePlan && (
-          <div
-            className="relative overflow-hidden"
-            style={{
-              width: 'min(100%, calc((100vh - 160px) * 9 / 19.5))',
-              aspectRatio: '9 / 19.5',
-            }}
-          >
-            {renderPlanCanvas()}
-            {/* Mobile pinch hint */}
-            {canvasZones.length > 0 && (
-              <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-                <div className="bg-black/60 backdrop-blur-sm text-white/70 text-[10px] px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-1.5">
-                  <ZoomIn className="w-3 h-3" /> Pinch to zoom · Tap a zone
-                </div>
-              </div>
-            )}
+      <div className="relative md:hidden flex-1" style={{ minHeight: 'calc(100vh - 160px)' }}>
+        {tab === 'phase-plan' && hasPhasePlan && renderPlanCanvas()}
+        {/* Mobile pinch hint */}
+        {tab === 'phase-plan' && hasPhasePlan && canvasZones.length > 0 && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+            <div className="bg-black/60 backdrop-blur-sm text-white/70 text-[10px] px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-1.5">
+              <ZoomIn className="w-3 h-3" /> Pinch to zoom · Tap a zone
+            </div>
           </div>
         )}
 
