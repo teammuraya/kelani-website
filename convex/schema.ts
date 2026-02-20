@@ -36,6 +36,7 @@ const masterPlanZoneValidator = v.object({
   id: v.string(),
   label: v.string(),        // e.g. "Phase 1", "Phase 2"
   points: v.array(zonePointValidator),
+  mobile_points: v.optional(v.array(zonePointValidator)), // separate coords for mobile view
   phaseId: v.optional(v.id("project_phases")),
   status: v.union(
     v.literal("available"),
@@ -49,6 +50,7 @@ const phaseUnitZoneValidator = v.object({
   id: v.string(),
   label: v.string(),        // e.g. "Unit A1", "Plot 12"
   points: v.array(zonePointValidator),
+  mobile_points: v.optional(v.array(zonePointValidator)), // separate coords for mobile view
   unitId: v.optional(v.id("project_units")),
   status: v.union(
     v.literal("available"),

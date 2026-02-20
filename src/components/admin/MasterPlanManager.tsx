@@ -7,7 +7,7 @@ import { api } from '@convex/_generated/api';
 import { Id } from '@convex/_generated/dataModel';
 import dynamic from 'next/dynamic';
 import {
-  Upload, Loader2, Save, Trash2, X, Info, Link as LinkIcon, Video,
+  Upload, Loader2, Save, Trash2, X, Info, Link as LinkIcon, Video, Monitor, Smartphone,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { CanvasZone, ZonePoint, ZoneStatus } from '@/components/canvas/ImmersiveCanvas';
@@ -21,8 +21,14 @@ type MasterPlanZone = {
   id: string;
   label: string;
   points: ZonePoint[];
+  mobile_points?: ZonePoint[];
   phaseId?: Id<'project_phases'>;
   status: 'available' | 'coming_soon' | 'sold_out';
+};
+
+// Extended zone type that includes mobile points
+type ZoneWithMobile = CanvasZone & {
+  mobilePoints?: ZonePoint[];
 };
 
 type Phase = {
@@ -57,13 +63,17 @@ export default function MasterPlanManager({
   const [videoUrl,   setVideoUrl]   = useState(initialVideoUrl ?? '');
   const [videoInput, setVideoInput] = useState(initialVideoUrl ?? '');
 
-  const [zones, setZones] = useState<CanvasZone[]>(
+  const [zones, setZones] = useState<ZoneWithMobile[]>(
     (initialZones ?? []).map(z => ({
       id: z.id, label: z.label, points: z.points,
+      mobilePoints: z.mobile_points,
       status: z.status as ZoneStatus,
       meta: { phaseId: z.phaseId },
     }))
   );
+
+  // Edit mode: desktop or mobile
+  const [editMode, setEditMode] = useState<'desktop' | 'mobile'>('desktop');
   const [saving, setSaving]       = useState(false);
   const [uploading, setUploading] = useState<'image' | 'video' | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -137,13 +147,39 @@ export default function MasterPlanManager({
   const confirmPendingZone = () => {
     if (!pendingZone) return;
     if (!pendingLabel.trim()) return toast.error('Zone label is required');
-    setZones(prev => [...prev, {
-      id: pendingZone.id,
-      label: pendingLabel.trim(),
-      points: pendingZone.points,
-      status: pendingStatus,
-      meta: pendingPhaseId ? { phaseId: pendingPhaseId } : {},
-    }]);
+
+    if (editMode === 'mobile') {
+      // In mobile mode, check if zone already exists (update mobile_points) or create new
+      const existingZone = zones.find(z => z.label.trim().toLowerCase() === pendingLabel.trim().toLowerCase());
+      if (existingZone) {
+        // Update existing zone with mobile points
+        setZones(prev => prev.map(z =>
+          z.id === existingZone.id
+            ? { ...z, mobilePoints: pendingZone.points }
+            : z
+        ));
+        toast.success('Mobile zone updated');
+      } else {
+        // Create new zone with mobile points only
+        setZones(prev => [...prev, {
+          id: pendingZone.id,
+          label: pendingLabel.trim(),
+          points: [], // Empty desktop points
+          mobilePoints: pendingZone.points,
+          status: pendingStatus,
+          meta: pendingPhaseId ? { phaseId: pendingPhaseId } : {},
+        }]);
+      }
+    } else {
+      // Desktop mode - create zone with desktop points
+      setZones(prev => [...prev, {
+        id: pendingZone.id,
+        label: pendingLabel.trim(),
+        points: pendingZone.points,
+        status: pendingStatus,
+        meta: pendingPhaseId ? { phaseId: pendingPhaseId } : {},
+      }]);
+    }
     setPendingZone(null);
   };
 
@@ -173,6 +209,7 @@ export default function MasterPlanManager({
         master_plan_zones: zones.map(z => ({
           id: z.id, label: z.label, points: z.points, status: z.status,
           phaseId: z.meta?.phaseId ?? undefined,
+          mobile_points: z.mobilePoints,
         })),
       });
       toast.success('Master plan saved');
@@ -304,14 +341,35 @@ export default function MasterPlanManager({
       {/* ── Canvas editor ── */}
       {hasMedia && (
         <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-          <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-            <div>
+          <div className="p-4 border-b border-gray-100 flex items-center justify-between gap-4">
+            <div className="flex-1 min-w-0">
               <h3 className="font-semibold text-gray-900">Draw Phase Zones</h3>
               <p className="text-xs text-gray-500 mt-0.5">
                 Use the pencil tool (top-right) to draw polygon zones over each phase area.
                 Link each zone to its phase so clicking it navigates to that phase.
               </p>
             </div>
+
+            {/* Desktop/Mobile toggle */}
+            <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-xl shrink-0">
+              <button
+                onClick={() => setEditMode('desktop')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  editMode === 'desktop' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <Monitor className="w-3.5 h-3.5" /> Desktop
+              </button>
+              <button
+                onClick={() => setEditMode('mobile')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  editMode === 'mobile' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <Smartphone className="w-3.5 h-3.5" /> Mobile
+              </button>
+            </div>
+
             <button onClick={handleSave} disabled={saving}
               className="flex items-center gap-2 px-5 py-2.5 bg-olive-500 text-white rounded-xl text-sm font-semibold hover:bg-olive-400 disabled:opacity-50 shrink-0">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -319,30 +377,84 @@ export default function MasterPlanManager({
             </button>
           </div>
 
-          <div ref={canvasContainerRef} className="h-[60vh] bg-gray-950 relative">
-            {/* Video plays behind if set - using object-contain for consistent zone alignment */}
-            {videoUrl && (
-              <video ref={videoElRef} src={videoUrl} autoPlay loop muted playsInline
-                className="absolute inset-0 w-full h-full object-contain" />
+          <div className="h-[60vh] bg-gray-950 relative flex items-center justify-center">
+            {/* Mobile mode: render in mobile aspect ratio container */}
+            {editMode === 'mobile' ? (
+              <div
+                ref={canvasContainerRef}
+                className="relative bg-gray-900 overflow-hidden rounded-lg shadow-2xl"
+                style={{
+                  width: 'min(280px, 90%)',
+                  aspectRatio: '9 / 19.5', // iPhone-like aspect ratio
+                }}
+              >
+                {/* Video plays behind if set */}
+                {videoUrl && (
+                  <video ref={videoElRef} src={videoUrl} autoPlay loop muted playsInline
+                    className="absolute inset-0 w-full h-full object-contain" />
+                )}
+                <div className="absolute inset-0">
+                  <ImmersiveCanvas
+                    imageUrl={imageUrl && !videoUrl ? imageUrl : undefined}
+                    transparent={!!videoUrl}
+                    zones={zones.map(z => ({
+                      ...z,
+                      points: z.mobilePoints ?? z.points, // Show mobile points if available
+                    }))}
+                    mode="edit"
+                    onZoneAdd={handleZoneAdd}
+                    onZoneDelete={handleZoneDelete}
+                    videoDisplayArea={videoUrl ? videoDisplayArea : undefined}
+                    className="w-full h-full"
+                  />
+                </div>
+                {/* Mobile preview label */}
+                <div className="absolute bottom-2 left-2 right-2 text-center">
+                  <span className="text-[10px] text-white/60 bg-black/40 px-2 py-0.5 rounded-full">
+                    Mobile Preview (9:19.5)
+                  </span>
+                </div>
+              </div>
+            ) : (
+              /* Desktop mode: full-width canvas */
+              <div ref={canvasContainerRef} className="absolute inset-0">
+                {/* Video plays behind if set - using object-contain for consistent zone alignment */}
+                {videoUrl && (
+                  <video ref={videoElRef} src={videoUrl} autoPlay loop muted playsInline
+                    className="absolute inset-0 w-full h-full object-contain" />
+                )}
+                <div className="absolute inset-0">
+                  <ImmersiveCanvas
+                    imageUrl={imageUrl && !videoUrl ? imageUrl : undefined}
+                    transparent={!!videoUrl}
+                    zones={zones}
+                    mode="edit"
+                    onZoneAdd={handleZoneAdd}
+                    onZoneDelete={handleZoneDelete}
+                    videoDisplayArea={videoUrl ? videoDisplayArea : undefined}
+                    className="w-full h-full"
+                  />
+                </div>
+              </div>
             )}
-            <div className="absolute inset-0">
-              <ImmersiveCanvas
-                imageUrl={imageUrl && !videoUrl ? imageUrl : undefined}
-                transparent={!!videoUrl}
-                zones={zones}
-                mode="edit"
-                onZoneAdd={handleZoneAdd}
-                onZoneDelete={handleZoneDelete}
-                videoDisplayArea={videoUrl ? videoDisplayArea : undefined}
-                className="w-full h-full"
-              />
-            </div>
           </div>
 
           {/* Pending zone form */}
           {pendingZone && (
             <div className="p-4 border-t border-gray-100 bg-orange-50">
-              <h4 className="text-sm font-semibold text-gray-900 mb-3">Name this phase zone</h4>
+              <div className="flex items-center gap-2 mb-3">
+                <h4 className="text-sm font-semibold text-gray-900">Name this phase zone</h4>
+                {editMode === 'mobile' && (
+                  <span className="flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                    <Smartphone className="w-3 h-3" /> Mobile mode
+                  </span>
+                )}
+              </div>
+              {editMode === 'mobile' && (
+                <p className="text-xs text-blue-600 mb-3">
+                  Drawing mobile-specific coordinates. If a zone with this label exists, its mobile points will be updated.
+                </p>
+              )}
               <div className="grid sm:grid-cols-3 gap-3">
                 <div>
                   <label className="text-xs font-medium text-gray-600 block mb-1">Zone Label *</label>
@@ -386,25 +498,46 @@ export default function MasterPlanManager({
                 {zones.length} zone{zones.length !== 1 ? 's' : ''}
               </p>
               {zones.map((zone) => (
-                <div key={zone.id} className="grid sm:grid-cols-3 gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 items-center">
-                  <input value={zone.label} onChange={(e) => updateZoneField(zone.id, 'label', e.target.value)}
-                    className={inputCls} placeholder="Label" />
-                  <select value={zone.status} onChange={(e) => updateZoneField(zone.id, 'status', e.target.value)} className={inputCls}>
-                    <option value="available">Available</option>
-                    <option value="coming_soon">Coming Soon</option>
-                    <option value="sold_out">Sold Out</option>
-                  </select>
-                  <div className="flex gap-2">
-                    <select value={zone.meta?.phaseId ?? ''} onChange={(e) => updateZoneField(zone.id, 'phaseId', e.target.value)}
-                      className={`${inputCls} flex-1`}>
-                      <option value="">— No phase link —</option>
-                      {phases.map(ph => (
-                        <option key={ph._id} value={ph._id}>{ph.name}</option>
-                      ))}
+                <div key={zone.id} className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                  <div className="grid sm:grid-cols-3 gap-3 items-center">
+                    <div className="flex items-center gap-2">
+                      <input value={zone.label} onChange={(e) => updateZoneField(zone.id, 'label', e.target.value)}
+                        className={`${inputCls} flex-1`} placeholder="Label" />
+                      {/* Mobile indicator */}
+                      {zone.mobilePoints && zone.mobilePoints.length > 0 && (
+                        <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-medium">
+                          <Smartphone className="w-3 h-3" />
+                        </span>
+                      )}
+                    </div>
+                    <select value={zone.status} onChange={(e) => updateZoneField(zone.id, 'status', e.target.value)} className={inputCls}>
+                      <option value="available">Available</option>
+                      <option value="coming_soon">Coming Soon</option>
+                      <option value="sold_out">Sold Out</option>
                     </select>
-                    <button onClick={() => handleZoneDelete(zone.id)} className="p-2 text-gray-300 hover:text-red-500">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex gap-2">
+                      <select value={zone.meta?.phaseId ?? ''} onChange={(e) => updateZoneField(zone.id, 'phaseId', e.target.value)}
+                        className={`${inputCls} flex-1`}>
+                        <option value="">— No phase link —</option>
+                        {phases.map(ph => (
+                          <option key={ph._id} value={ph._id}>{ph.name}</option>
+                        ))}
+                      </select>
+                      <button onClick={() => handleZoneDelete(zone.id)} className="p-2 text-gray-300 hover:text-red-500">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  {/* Show coordinate status */}
+                  <div className="mt-2 flex items-center gap-3 text-[10px]">
+                    <span className={`flex items-center gap-1 ${zone.points.length > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                      <Monitor className="w-3 h-3" />
+                      Desktop: {zone.points.length > 0 ? `${zone.points.length} pts` : 'Not set'}
+                    </span>
+                    <span className={`flex items-center gap-1 ${zone.mobilePoints && zone.mobilePoints.length > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
+                      <Smartphone className="w-3 h-3" />
+                      Mobile: {zone.mobilePoints && zone.mobilePoints.length > 0 ? `${zone.mobilePoints.length} pts` : 'Not set'}
+                    </span>
                   </div>
                 </div>
               ))}

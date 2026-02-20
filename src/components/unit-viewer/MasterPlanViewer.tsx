@@ -35,6 +35,7 @@ type Phase     = { _id: string; name: string; slug: string; description?: string
 type MasterPlanZone = {
   id: string; label: string;
   points: { x: number; y: number }[];
+  mobile_points?: { x: number; y: number }[];
   phaseId?: string;
   status: 'available' | 'coming_soon' | 'sold_out';
 };
@@ -193,6 +194,15 @@ export default function MasterPlanViewer({ project, phases }: {
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const videoDisplayArea = useVideoDisplayArea(videoRef, canvasContainerRef);
 
+  // Mobile detection for using mobile_points
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   const [tab,               setTab]               = useState<Tab>('sitemap');
   const [activePhaseIdx,    setActivePhaseIdx]     = useState(0);
   const [mediaIndex,        setMediaIndex]         = useState(0);
@@ -219,10 +229,12 @@ export default function MasterPlanViewer({ project, phases }: {
   const hasPanoramas = (project.panoramas ?? []).length > 0;
 
   const canvasZones: CanvasZone[] = useMemo(() => (project.master_plan_zones ?? []).map(z => ({
-    id: z.id, label: z.label, points: z.points,
+    id: z.id, label: z.label,
+    // Use mobile_points on mobile devices if available
+    points: (isMobile && z.mobile_points && z.mobile_points.length > 0) ? z.mobile_points : z.points,
     status: z.status as ZoneStatus,
     meta: { phaseId: z.phaseId },
-  })), [project.master_plan_zones]);
+  })), [project.master_plan_zones, isMobile]);
 
   const handleZoneClick = useCallback((zone: CanvasZone) => {
     if (zone.meta?.phaseId) {
