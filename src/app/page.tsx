@@ -39,10 +39,18 @@ export default function Home() {
   const featuredProjects = useQuery(api.projects.getFeatured);
   const locations = useQuery(api.locations.getTopFour);
   const homepageContent = useQuery(api.homepageContent.get);
-  const loading = featuredProjects === undefined || locations === undefined;
+  const loading = featuredProjects === undefined || locations === undefined || homepageContent === undefined;
 
   const img = (key: keyof typeof IMG_DEFAULTS) =>
     ((homepageContent as Record<string, unknown> | null | undefined)?.[key] as string | undefined) || IMG_DEFAULTS[key];
+
+  if (loading) {
+    return (
+      <div className="bg-charcoal-900 min-h-screen flex items-center justify-center">
+        <div className="w-10 h-10 border-2 border-olive-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="bg-charcoal-900">
@@ -67,8 +75,6 @@ export default function Home() {
 
               <h1 className="font-display text-5xl md:text-6xl lg:text-7xl text-white font-semibold leading-[1.05] mb-6 text-shadow-lg">
                 Your Property.
-                
-                
                 <br />
                 Your Story.
               </h1>
