@@ -337,9 +337,28 @@ export default function MasterPlanViewer({ project, phases }: {
       </div>
 
       {/* ── MOBILE CANVAS — full height below header ──────────────── */}
-      <div className="relative md:hidden flex-1" style={{ minHeight: 'calc(100vh - 160px)' }}>
+      <div className="relative md:hidden flex-1 flex items-center justify-center bg-black" style={{ minHeight: 'calc(100vh - 160px)' }}>
 
-        {tab === 'sitemap' && hasMasterPlan && renderSitemapCanvas()}
+        {/* Sitemap canvas - fixed 9:19.5 aspect ratio to match admin mobile preview */}
+        {tab === 'sitemap' && hasMasterPlan && (
+          <div
+            className="relative overflow-hidden"
+            style={{
+              width: 'min(100%, calc((100vh - 160px) * 9 / 19.5))',
+              aspectRatio: '9 / 19.5',
+            }}
+          >
+            {renderSitemapCanvas()}
+            {/* Mobile pinch hint */}
+            {canvasZones.length > 0 && (
+              <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+                <div className="bg-black/60 backdrop-blur-sm text-white/70 text-[10px] px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-1.5">
+                  <ZoomIn className="w-3 h-3" /> Pinch to zoom · Tap a zone
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {tab === 'sitemap' && !hasMasterPlan && (
           <div className="absolute inset-0 bg-gray-950 flex flex-col items-center justify-center gap-4 p-8">
@@ -381,14 +400,6 @@ export default function MasterPlanViewer({ project, phases }: {
           </div>
         )}
 
-        {/* Pinch hint */}
-        {tab === 'sitemap' && hasMasterPlan && canvasZones.length > 0 && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-            <div className="bg-black/60 backdrop-blur-sm text-white/70 text-[10px] px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-1.5">
-              <ZoomIn className="w-3 h-3" /> Pinch to zoom · Tap a zone
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ── MOBILE Phase list strip (when no popup) ───────────────── */}
