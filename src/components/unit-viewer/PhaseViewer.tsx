@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { PanoramaModal } from '@/components/unit-viewer/PanoramaModal';
+import { useVideoDisplayArea } from '@/hooks/useVideoDisplayArea';
 
 const ImmersiveCanvas = dynamic(
   () => import('@/components/canvas/ImmersiveCanvas').then(m => m.ImmersiveCanvas),
@@ -87,11 +88,11 @@ function UnitPopup({ unit, projectSlug, onClose, onExplore }: {
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm pointer-events-auto" onClick={onClose} />
 
       {/* Card — slides up from bottom on mobile, floats right on desktop */}
-      <div className="relative pointer-events-auto w-full md:w-[380px] md:mr-8 z-10 md:mb-0">
-        <div className="bg-[#0f0f0f]/98 backdrop-blur-2xl border border-white/10 rounded-t-3xl md:rounded-3xl shadow-2xl overflow-hidden">
+      <div className="relative pointer-events-auto w-full md:w-[380px] md:mr-8 z-10 md:mb-0 max-h-[60vh] md:max-h-none">
+        <div className="bg-[#0f0f0f]/98 backdrop-blur-2xl border border-white/10 rounded-t-3xl md:rounded-3xl shadow-2xl overflow-hidden overflow-y-auto max-h-[60vh] md:max-h-none">
 
           {/* Hero image */}
-          <div className="relative h-52 w-full bg-gray-900 overflow-hidden">
+          <div className="relative h-36 md:h-52 w-full bg-gray-900 overflow-hidden">
             {(unit.banner_image_url || unit.thumbnail_url) ? (
               <img src={unit.banner_image_url || unit.thumbnail_url} alt={unit.name} className="w-full h-full object-cover" />
             ) : (
@@ -217,6 +218,11 @@ export default function PhaseViewer({ phase, units, projectSlug, projectName }: 
 }) {
   const canvasRef = useRef<ImmersiveCanvasRef>(null);
 
+  // Refs for video display area calculation
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const videoDisplayArea = useVideoDisplayArea(videoRef, canvasContainerRef);
+
   const [tab,              setTab]              = useState<Tab>('phase-plan');
   const [mediaIndex,       setMediaIndex]       = useState(0);
   const [highlightedZoneId, setHighlightedZoneId] = useState<string | null>(null);
@@ -288,16 +294,16 @@ export default function PhaseViewer({ phase, units, projectSlug, projectName }: 
   // ── Canvas + popup layer ─────────────────────────────────────────────────
 
   const renderPlanCanvas = () => (
-    <div className="absolute inset-0 overflow-hidden">
+    <div className="absolute inset-0 overflow-hidden" ref={canvasContainerRef}>
       {/* Zoom wrapper — video + canvas scale together */}
       <div className="absolute inset-0" style={hasPlanVideo ? tStyle : {}}>
         {hasPlanVideo && (
-          <video src={phase.phase_plan_video_url!} autoPlay loop muted playsInline
-            className="absolute inset-0 w-full h-full object-cover" />
+          <video ref={videoRef} src={phase.phase_plan_video_url!} autoPlay loop muted playsInline
+            className="absolute inset-0 w-full h-full object-contain md:object-cover" />
         )}
         {hasPlanImage && !hasPlanVideo && (
           <img src={phase.phase_plan_url!} alt={phase.name}
-            className="absolute inset-0 w-full h-full object-cover" />
+            className="absolute inset-0 w-full h-full object-contain md:object-cover" />
         )}
         <div className="absolute inset-0 z-10">
           <ImmersiveCanvas
@@ -309,6 +315,7 @@ export default function PhaseViewer({ phase, units, projectSlug, projectName }: 
             onZoneClick={handleZoneClick}
             highlightedZoneId={highlightedZoneId}
             onTransparentZoom={handleTransparentZoom}
+            videoDisplayArea={hasPlanVideo ? videoDisplayArea : undefined}
             className="w-full h-full"
           />
         </div>

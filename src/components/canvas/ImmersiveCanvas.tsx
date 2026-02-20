@@ -49,6 +49,14 @@ export type CanvasZone = {
 
 export type ImmersiveCanvasMode = 'view' | 'edit';
 
+export type VideoDisplayArea = {
+  offsetX: number;
+  offsetY: number;
+  displayWidth: number;
+  displayHeight: number;
+  ready: boolean;
+};
+
 export type ImmersiveCanvasProps = {
   imageUrl?: string;
   transparent?: boolean;
@@ -68,6 +76,12 @@ export type ImmersiveCanvasProps = {
    * scale=1, tx=0, ty=0 → identity / reset.
    */
   onTransparentZoom?: (scale: number, tx: number, ty: number) => void;
+  /**
+   * Video display area for transparent mode with object-contain.
+   * When provided, zones are rendered relative to the actual video area
+   * (accounting for letterboxing), not the full container.
+   */
+  videoDisplayArea?: VideoDisplayArea;
 };
 
 export interface ImmersiveCanvasRef {
@@ -120,6 +134,7 @@ export const ImmersiveCanvas = forwardRef<ImmersiveCanvasRef, ImmersiveCanvasPro
     onZoneClick, onZoneAdd, onZoneDelete,
     highlightedZoneId, className = '',
     onTransparentZoom,
+    videoDisplayArea,
   }, ref) {
     const canvasRef    = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -204,8 +219,14 @@ export const ImmersiveCanvas = forwardRef<ImmersiveCanvasRef, ImmersiveCanvasPro
       const cw = c.clientWidth; const ch = c.clientHeight;
 
       if (transparent) {
-        const xs = zone.points.map(p => p.x * cw);
-        const ys = zone.points.map(p => p.y * ch);
+        // Use videoDisplayArea if available, otherwise fall back to container dimensions
+        const areaW = videoDisplayArea?.ready ? videoDisplayArea.displayWidth : cw;
+        const areaH = videoDisplayArea?.ready ? videoDisplayArea.displayHeight : ch;
+        const offsetX = videoDisplayArea?.ready ? videoDisplayArea.offsetX : 0;
+        const offsetY = videoDisplayArea?.ready ? videoDisplayArea.offsetY : 0;
+
+        const xs = zone.points.map(p => offsetX + p.x * areaW);
+        const ys = zone.points.map(p => offsetY + p.y * areaH);
         const x0 = Math.min(...xs), x1 = Math.max(...xs);
         const y0 = Math.min(...ys), y1 = Math.max(...ys);
         const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
@@ -247,7 +268,7 @@ export const ImmersiveCanvas = forwardRef<ImmersiveCanvasRef, ImmersiveCanvasPro
         rerender(); if (t < 1) requestAnimationFrame(go);
       };
       requestAnimationFrame(go);
-    }, [zones, imgSize, transparent, rerender, onTransparentZoom]);
+    }, [zones, imgSize, transparent, rerender, onTransparentZoom, videoDisplayArea]);
 
     useImperativeHandle(ref, () => ({ resetView: fitToContainer, zoomToZone }));
 
@@ -275,7 +296,12 @@ export const ImmersiveCanvas = forwardRef<ImmersiveCanvasRef, ImmersiveCanvasPro
       for (let i = zones.length - 1; i >= 0; i--) {
         const zone = zones[i]; if (zone.points.length < 3) continue;
         const pts = transparent
-          ? zone.points.map(q => ({ x: q.x * CW, y: q.y * CH }))
+          ? (videoDisplayArea?.ready
+              ? zone.points.map(q => ({
+                  x: videoDisplayArea.offsetX + q.x * videoDisplayArea.displayWidth,
+                  y: videoDisplayArea.offsetY + q.y * videoDisplayArea.displayHeight
+                }))
+              : zone.points.map(q => ({ x: q.x * CW, y: q.y * CH })))
           : zone.points.map(q => ({ x: q.x * imgSize.w * z + p.x, y: q.y * imgSize.h * z + p.y }));
         let inside = false;
         for (let j = 0, k = pts.length - 1; j < pts.length; k = j++) {
@@ -285,7 +311,7 @@ export const ImmersiveCanvas = forwardRef<ImmersiveCanvasRef, ImmersiveCanvasPro
         if (inside) return zone;
       }
       return null;
-    }, [zones, transparent, imgSize]);
+    }, [zones, transparent, imgSize, videoDisplayArea]);
 
     // ── Draw render loop ──────────────────────────────────────────────────
 
@@ -305,7 +331,12 @@ export const ImmersiveCanvas = forwardRef<ImmersiveCanvasRef, ImmersiveCanvasPro
       for (const zone of zones) {
         if (zone.points.length < 3) continue;
         const pts = transparent
-          ? zone.points.map(q => ({ x: q.x * W, y: q.y * H }))
+          ? (videoDisplayArea?.ready
+              ? zone.points.map(q => ({
+                  x: videoDisplayArea.offsetX + q.x * videoDisplayArea.displayWidth,
+                  y: videoDisplayArea.offsetY + q.y * videoDisplayArea.displayHeight
+                }))
+              : zone.points.map(q => ({ x: q.x * W, y: q.y * H })))
           : zone.points.map(q => ({ x: q.x * imgSize.w * z + p.x, y: q.y * imgSize.h * z + p.y }));
         const hot = zone.id === hoverZoneId || zone.id === highlightedZoneId || zone.id === selZoneId;
         ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
@@ -335,7 +366,7 @@ export const ImmersiveCanvas = forwardRef<ImmersiveCanvasRef, ImmersiveCanvasPro
         if (nearStart && drawPath.length > 2) { ctx.beginPath(); ctx.arc(pts[0].x, pts[0].y, 10, 0, Math.PI * 2); ctx.strokeStyle = '#f97316'; ctx.lineWidth = 2; ctx.stroke(); }
       }
       ctx.restore();
-    }, [zones, drawPath, isDrawing, nearStart, hoverZoneId, highlightedZoneId, selZoneId, imgSize, transparent]);
+    }, [zones, drawPath, isDrawing, nearStart, hoverZoneId, highlightedZoneId, selZoneId, imgSize, transparent, videoDisplayArea]);
 
     useEffect(() => { cancelAnimationFrame(rafRef.current); rafRef.current = requestAnimationFrame(render); return () => cancelAnimationFrame(rafRef.current); }, [render]);
 

@@ -9,7 +9,7 @@
  * Desktop: left panel + bottom carousel.
  */
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { PanoramaModal } from '@/components/unit-viewer/PanoramaModal';
+import { useVideoDisplayArea } from '@/hooks/useVideoDisplayArea';
 
 const ImmersiveCanvas = dynamic(
   () => import('@/components/canvas/ImmersiveCanvas').then(m => m.ImmersiveCanvas),
@@ -69,11 +70,11 @@ function PhasePopup({ phase, projectSlug, onClose }: {
   return (
     <div className="fixed inset-0 z-[60] flex items-end md:items-center justify-center md:justify-end pointer-events-none">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm pointer-events-auto" onClick={onClose} />
-      <div className="relative pointer-events-auto w-full md:w-[380px] md:mr-8 z-10">
-        <div className="bg-[#0f0f0f]/98 backdrop-blur-2xl border border-white/10 rounded-t-3xl md:rounded-3xl shadow-2xl overflow-hidden">
+      <div className="relative pointer-events-auto w-full md:w-[380px] md:mr-8 z-10 max-h-[60vh] md:max-h-none">
+        <div className="bg-[#0f0f0f]/98 backdrop-blur-2xl border border-white/10 rounded-t-3xl md:rounded-3xl shadow-2xl overflow-hidden overflow-y-auto max-h-[60vh] md:max-h-none">
 
           {/* Phase thumbnail */}
-          <div className="relative h-44 w-full bg-gray-900 overflow-hidden">
+          <div className="relative h-32 md:h-44 w-full bg-gray-900 overflow-hidden">
             {phase.thumbnail_url ? (
               <img src={phase.thumbnail_url} alt={phase.name} className="w-full h-full object-cover" />
             ) : (
@@ -187,6 +188,11 @@ export default function MasterPlanViewer({ project, phases }: {
 }) {
   const router = useRouter();
 
+  // Refs for video display area calculation
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const videoDisplayArea = useVideoDisplayArea(videoRef, canvasContainerRef);
+
   const [tab,               setTab]               = useState<Tab>('sitemap');
   const [activePhaseIdx,    setActivePhaseIdx]     = useState(0);
   const [mediaIndex,        setMediaIndex]         = useState(0);
@@ -249,15 +255,15 @@ export default function MasterPlanViewer({ project, phases }: {
   // ── Canvas layer ────────────────────────────────────────────────────────
 
   const renderSitemapCanvas = () => (
-    <div className="absolute inset-0 overflow-hidden">
+    <div className="absolute inset-0 overflow-hidden" ref={canvasContainerRef}>
       <div className="absolute inset-0" style={hasMasterVideo ? tStyle : {}}>
         {hasMasterVideo && (
-          <video src={project.master_plan_video_url!} autoPlay loop muted playsInline
-            className="absolute inset-0 w-full h-full object-cover" />
+          <video ref={videoRef} src={project.master_plan_video_url!} autoPlay loop muted playsInline
+            className="absolute inset-0 w-full h-full object-contain md:object-cover" />
         )}
         {hasMasterImage && !hasMasterVideo && (
           <img src={project.master_plan_url!} alt={project.name}
-            className="absolute inset-0 w-full h-full object-cover" />
+            className="absolute inset-0 w-full h-full object-contain md:object-cover" />
         )}
         <div className="absolute inset-0 z-10">
           <ImmersiveCanvas
@@ -268,6 +274,7 @@ export default function MasterPlanViewer({ project, phases }: {
             onZoneClick={handleZoneClick}
             highlightedZoneId={highlightedZoneId}
             onTransparentZoom={handleTransparentZoom}
+            videoDisplayArea={hasMasterVideo ? videoDisplayArea : undefined}
             className="w-full h-full"
           />
         </div>
