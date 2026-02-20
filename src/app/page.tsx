@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { ArrowRight, Play, Shield, TreePine, Building, Award, ChevronRight } from 'lucide-react';
 import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
@@ -47,10 +48,13 @@ export default function Home() {
   return (
     <div className="bg-charcoal-900">
       <section className="relative min-h-screen flex items-end pb-20 overflow-hidden">
-        <img
+        <Image
           src={img('hero_bg')}
           alt="Kelani Developments"
-          className="absolute inset-0 w-full h-full object-cover"
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-charcoal-900 via-charcoal-900/50 to-charcoal-900/30" />
         <div className="absolute inset-0 bg-gradient-to-r from-charcoal-900/70 to-transparent" />
@@ -102,18 +106,22 @@ export default function Home() {
                   living -- elevated, intimate, and intentional.
                 </p>
                 <div className="flex gap-3">
-                  <div className="w-40 h-28 rounded-xl overflow-hidden">
-                    <img
+                  <div className="w-40 h-28 rounded-xl overflow-hidden relative">
+                    <Image
                       src={img('hero_thumb_1')}
                       alt="Interior"
-                      className="w-full h-full object-cover"
+                      fill
+                      sizes="160px"
+                      className="object-cover"
                     />
                   </div>
                   <div className="w-40 h-28 rounded-xl overflow-hidden relative group cursor-pointer">
-                    <img
+                    <Image
                       src={img('hero_thumb_2')}
                       alt="Interior"
-                      className="w-full h-full object-cover"
+                      fill
+                      sizes="160px"
+                      className="object-cover"
                     />
                     <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
                       <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30">
