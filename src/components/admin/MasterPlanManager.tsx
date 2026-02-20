@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
+import { useVideoDisplayArea } from '@/hooks/useVideoDisplayArea';
 import { useMutation } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { Id } from '@convex/_generated/dataModel';
@@ -76,6 +77,11 @@ export default function MasterPlanManager({
 
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
+
+  // Video display area calculation for zone alignment
+  const videoElRef = useRef<HTMLVideoElement>(null);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const videoDisplayArea = useVideoDisplayArea(videoElRef, canvasContainerRef);
 
   // ── Upload helper ──────────────────────────────────────────────────────────
 
@@ -313,11 +319,11 @@ export default function MasterPlanManager({
             </button>
           </div>
 
-          <div className="h-[60vh] bg-gray-950 relative">
-            {/* Video plays behind if set */}
+          <div ref={canvasContainerRef} className="h-[60vh] bg-gray-950 relative">
+            {/* Video plays behind if set - using object-contain for consistent zone alignment */}
             {videoUrl && (
-              <video src={videoUrl} autoPlay loop muted playsInline
-                className="absolute inset-0 w-full h-full object-cover" />
+              <video ref={videoElRef} src={videoUrl} autoPlay loop muted playsInline
+                className="absolute inset-0 w-full h-full object-contain" />
             )}
             <div className="absolute inset-0">
               <ImmersiveCanvas
@@ -327,6 +333,7 @@ export default function MasterPlanManager({
                 mode="edit"
                 onZoneAdd={handleZoneAdd}
                 onZoneDelete={handleZoneDelete}
+                videoDisplayArea={videoUrl ? videoDisplayArea : undefined}
                 className="w-full h-full"
               />
             </div>

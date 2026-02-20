@@ -259,11 +259,11 @@ export default function MasterPlanViewer({ project, phases }: {
       <div className="absolute inset-0" style={hasMasterVideo ? tStyle : {}}>
         {hasMasterVideo && (
           <video ref={videoRef} src={project.master_plan_video_url!} autoPlay loop muted playsInline
-            className="absolute inset-0 w-full h-full object-contain md:object-cover" />
+            className="absolute inset-0 w-full h-full object-contain" />
         )}
         {hasMasterImage && !hasMasterVideo && (
           <img src={project.master_plan_url!} alt={project.name}
-            className="absolute inset-0 w-full h-full object-contain md:object-cover" />
+            className="absolute inset-0 w-full h-full object-contain" />
         )}
         <div className="absolute inset-0 z-10">
           <ImmersiveCanvas

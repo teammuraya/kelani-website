@@ -358,7 +358,11 @@ export const ImmersiveCanvas = forwardRef<ImmersiveCanvasRef, ImmersiveCanvasPro
       }
 
       if (isDrawing && drawPath.length > 0) {
-        const pts = drawPath.map(q => transparent ? { x: q.x * W, y: q.y * H } : { x: q.x * z + p.x, y: q.y * z + p.y });
+        const pts = drawPath.map(q => transparent
+          ? (videoDisplayArea?.ready
+              ? { x: videoDisplayArea.offsetX + q.x * videoDisplayArea.displayWidth, y: videoDisplayArea.offsetY + q.y * videoDisplayArea.displayHeight }
+              : { x: q.x * W, y: q.y * H })
+          : { x: q.x * z + p.x, y: q.y * z + p.y });
         ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
         for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
         ctx.strokeStyle = '#f97316'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ctx.stroke(); ctx.setLineDash([]);
@@ -386,7 +390,19 @@ export const ImmersiveCanvas = forwardRef<ImmersiveCanvasRef, ImmersiveCanvasPro
       if (transparent) {
         if (isDrawing) {
           const r = canvasRef.current!.getBoundingClientRect();
-          const np: ZonePoint = { x: pos.x / r.width, y: pos.y / r.height };
+          let np: ZonePoint;
+          if (videoDisplayArea?.ready) {
+            // Normalize relative to video display area (accounts for letterboxing)
+            np = {
+              x: (pos.x - videoDisplayArea.offsetX) / videoDisplayArea.displayWidth,
+              y: (pos.y - videoDisplayArea.offsetY) / videoDisplayArea.displayHeight
+            };
+            // Only allow drawing within the video area (0-1 range)
+            if (np.x < 0 || np.x > 1 || np.y < 0 || np.y > 1) return;
+          } else {
+            // Fallback: normalize to container
+            np = { x: pos.x / r.width, y: pos.y / r.height };
+          }
           if (nearStart && drawPath.length > 2) { onZoneAdd?.(drawPath, `zone-${Date.now()}`); setDrawPath([]); setNearStart(false); }
           else setDrawPath(prev => [...prev, np]);
         }
@@ -399,7 +415,7 @@ export const ImmersiveCanvas = forwardRef<ImmersiveCanvasRef, ImmersiveCanvasPro
         return;
       }
       setIsPanning(true); setDragLast(pos);
-    }, [isDrawing, nearStart, drawPath, onZoneAdd, transparent, imageToNorm]);
+    }, [isDrawing, nearStart, drawPath, onZoneAdd, transparent, imageToNorm, videoDisplayArea]);
 
     const handleMouseMove = useCallback((e: React.MouseEvent) => {
       const pos = getMousePos(e);
@@ -410,13 +426,22 @@ export const ImmersiveCanvas = forwardRef<ImmersiveCanvasRef, ImmersiveCanvasPro
       }
       if (isDrawing && drawPath.length > 2) {
         if (transparent) {
-          const r = canvasRef.current!.getBoundingClientRect();
-          setNearStart(Math.hypot(pos.x - drawPath[0].x * r.width, pos.y - drawPath[0].y * r.height) < CLOSE_PX);
+          // Calculate first point position accounting for videoDisplayArea
+          let firstX: number, firstY: number;
+          if (videoDisplayArea?.ready) {
+            firstX = videoDisplayArea.offsetX + drawPath[0].x * videoDisplayArea.displayWidth;
+            firstY = videoDisplayArea.offsetY + drawPath[0].y * videoDisplayArea.displayHeight;
+          } else {
+            const r = canvasRef.current!.getBoundingClientRect();
+            firstX = drawPath[0].x * r.width;
+            firstY = drawPath[0].y * r.height;
+          }
+          setNearStart(Math.hypot(pos.x - firstX, pos.y - firstY) < CLOSE_PX);
         } else {
           setNearStart(Math.hypot(pos.x - (drawPath[0].x * zoomRef.current + panRef.current.x), pos.y - (drawPath[0].y * zoomRef.current + panRef.current.y)) < CLOSE_PX);
         }
       }
-    }, [isDrawing, isPanning, drawPath, dragLast, hitTest, transparent, rerender]);
+    }, [isDrawing, isPanning, drawPath, dragLast, hitTest, transparent, rerender, videoDisplayArea]);
 
     const handleMouseUp = useCallback((e: React.MouseEvent) => {
       const pos = getMousePos(e);
@@ -558,8 +583,20 @@ export const ImmersiveCanvas = forwardRef<ImmersiveCanvasRef, ImmersiveCanvasPro
           } else {
             // Tap adds draw point
             if (transparent) {
-              const r  = canvasRef.current!.getBoundingClientRect();
-              const np: ZonePoint = { x: pos.x / r.width, y: pos.y / r.height };
+              const r = canvasRef.current!.getBoundingClientRect();
+              let np: ZonePoint;
+              if (videoDisplayArea?.ready) {
+                // Normalize relative to video display area (accounts for letterboxing)
+                np = {
+                  x: (pos.x - videoDisplayArea.offsetX) / videoDisplayArea.displayWidth,
+                  y: (pos.y - videoDisplayArea.offsetY) / videoDisplayArea.displayHeight
+                };
+                // Only allow drawing within the video area (0-1 range)
+                if (np.x < 0 || np.x > 1 || np.y < 0 || np.y > 1) return;
+              } else {
+                // Fallback: normalize to container
+                np = { x: pos.x / r.width, y: pos.y / r.height };
+              }
               if (nearStart && drawPath.length > 2) { onZoneAdd?.(drawPath, `zone-${Date.now()}`); setDrawPath([]); setNearStart(false); }
               else setDrawPath(prev => [...prev, np]);
             } else {
@@ -579,7 +616,7 @@ export const ImmersiveCanvas = forwardRef<ImmersiveCanvasRef, ImmersiveCanvasPro
         st.active   = Array.from(e.touches).map(t => ({ id: t.identifier, x: t.clientX, y: t.clientY }));
         st.tapStart = null; st.moved = false;
       }
-    }, [isDrawing, hitTest, mode, onZoneClick, transparent, nearStart, drawPath, onZoneAdd, imageToNorm]);
+    }, [isDrawing, hitTest, mode, onZoneClick, transparent, nearStart, drawPath, onZoneAdd, imageToNorm, videoDisplayArea]);
 
     // ── Keyboard ──────────────────────────────────────────────────────────
 

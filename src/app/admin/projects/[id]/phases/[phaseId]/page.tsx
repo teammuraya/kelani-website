@@ -16,6 +16,7 @@ import { useQuery, useMutation } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { Id } from '@convex/_generated/dataModel';
 import { useState, useRef, useCallback } from 'react';
+import { useVideoDisplayArea } from '@/hooks/useVideoDisplayArea';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import {
@@ -231,6 +232,11 @@ function PhasePlanManager({ phase, phaseId, units }: {
   const imageRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLInputElement>(null);
 
+  // Video display area calculation for zone alignment
+  const videoElRef = useRef<HTMLVideoElement>(null);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const videoDisplayArea = useVideoDisplayArea(videoElRef, canvasContainerRef);
+
   const uploadToConvex = async (file: File): Promise<string> => {
     const uploadUrl = await generateUrl();
     const storageId: Id<'_storage'> = await new Promise((res, rej) => {
@@ -428,10 +434,11 @@ function PhasePlanManager({ phase, phaseId, units }: {
             </button>
           </div>
 
-          <div className="h-[60vh] bg-gray-950 relative">
+          <div ref={canvasContainerRef} className="h-[60vh] bg-gray-950 relative">
+            {/* Video uses object-contain for consistent zone alignment */}
             {videoUrl && (
-              <video src={videoUrl} autoPlay loop muted playsInline
-                className="absolute inset-0 w-full h-full object-cover" />
+              <video ref={videoElRef} src={videoUrl} autoPlay loop muted playsInline
+                className="absolute inset-0 w-full h-full object-contain" />
             )}
             <div className="absolute inset-0">
               <ImmersiveCanvas
@@ -441,6 +448,7 @@ function PhasePlanManager({ phase, phaseId, units }: {
                 mode="edit"
                 onZoneAdd={handleZoneAdd}
                 onZoneDelete={handleZoneDelete}
+                videoDisplayArea={videoUrl ? videoDisplayArea : undefined}
                 className="w-full h-full"
               />
             </div>
