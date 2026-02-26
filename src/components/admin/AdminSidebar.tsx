@@ -11,12 +11,14 @@ import {
   X,
   ChevronRight,
   ExternalLink,
+  MessageSquareText,
 } from 'lucide-react';
 
 const NAV = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { href: '/admin/homepage', label: 'Homepage', icon: Home },
   { href: '/admin/projects', label: 'Projects', icon: Building2 },
+  { href: '/admin/contacts', label: 'Contact Submissions', icon: MessageSquareText },
   { href: '/admin/admins', label: 'Admin Users', icon: Users },
 ];
 
